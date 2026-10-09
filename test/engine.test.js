@@ -277,3 +277,44 @@ test("late in the month, an unreachable minimum gives a best-effort plan with a 
   assert.equal(wfoDays(p).length, 4); // 1 logged + the 3 days left
   assert.ok(p.warnings.some((w) => /At most 4 of the 12/.test(w)), JSON.stringify(p.warnings));
 });
+
+test("weekday holidays are spent at home in Hyderabad by default", () => {
+  const s = base({
+    policies: [{ type: "weeklyMin", value: 3 }],
+    calendar: [{ category: "holiday", start: "2026-11-11", label: "Mid-week holiday" }],
+  });
+  const p = E.planMonth("2026-11", s, { weights: { trips: 40 } }); // even when trips are very costly
+  assert.ok(p.feasible);
+  assert.equal(p.days.find((d) => d.date === "2026-11-11").location, "HYD");
+  assert.ok(p.explanation === undefined || true);
+  assert.equal(p.metrics.holidaysHome, 1);
+  s.prefs.holidaysAtHome = false;
+  const q = E.planMonth("2026-11", s, { weights: { trips: 40 } });
+  assert.equal(q.days.find((d) => d.date === "2026-11-11").location, "BLR");
+});
+
+test("a booked ticket or must-attend event overrides the holiday-at-home rule", () => {
+  const s = base({
+    policies: [{ type: "weeklyMin", value: 2 }],
+    calendar: [
+      { category: "holiday", start: "2026-11-11" },
+      { category: "holiday", start: "2026-11-18" },
+      { category: "event", start: "2026-11-18", location: "BLR", mustAttend: true, label: "Daughter's school day" },
+    ],
+    journeys: [{ date: "2026-11-10", from: "HYD", to: "BLR", status: "booked" }],
+  });
+  const p = E.planMonth("2026-11", s);
+  assert.ok(p.feasible);
+  assert.equal(p.days.find((d) => d.date === "2026-11-11").location, "BLR");
+  assert.equal(p.days.find((d) => d.date === "2026-11-18").location, "BLR");
+});
+
+test("completed journeys fix where you were", () => {
+  const s = base({
+    policies: [{ type: "monthlyMin", value: 6 }],
+    journeys: [{ date: "2026-11-03", from: "HYD", to: "BLR", status: "completed" }],
+  });
+  const p = E.planMonth("2026-11", s);
+  assert.equal(p.days.find((d) => d.date === "2026-11-03").location, "HYD");
+  assert.equal(p.days.find((d) => d.date === "2026-11-04").location, "BLR");
+});

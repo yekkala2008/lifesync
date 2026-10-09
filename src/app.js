@@ -42,6 +42,7 @@
     defaultMode: "train",
     departWindow: "20:00–23:00",
     maxJourneyHours: 12,
+    holidaysAtHome: true,
     weights: {},
   };
   const EMPTY = () => ({
@@ -493,6 +494,26 @@
       <div><span class="v">${m.hydWeekends}</span><span class="k">home weekend days</span></div>
     </div>`;
   }
+  function TravelDates({ journeys, state, today }) {
+    if (!journeys.length) return html`<p class="small muted">No travel needed.</p>`;
+    const lead = state.prefs.bookingLeadDays != null ? state.prefs.bookingLeadDays : 21;
+    const booked = (state.journeys || []).filter((j) => ["booked", "waitlisted", "completed"].includes(j.status));
+    const match = (j) => booked.find((b) => b.date === j.date && b.from === j.from && b.to === j.to);
+    return html`<div class="trips">
+      <span class="eyebrow">Suggested travel</span>
+      ${journeys.map((j) => {
+        const b = match(j);
+        const past = j.date < today;
+        const bookBy = E.addDays(j.date, -lead);
+        return html`<div class="trip-row">
+          <span class="num trip-date">${fDay(j.date)}</span>
+          <${Route} j=${j} />
+          <span class="tiny muted trip-note">${b ? (b.status === "completed" ? "Done" : b.status === "waitlisted" ? "Waitlisted" : "Booked") : past ? "Past" : `evening · book by ${bookBy < today ? "now" : fDay(bookBy)}`}</span>
+        </div>`;
+      })}
+    </div>`;
+  }
+
   function PlanScreen({ state, today, month, setMonth, acceptPlan, go }) {
     const ym = month;
     const current = acceptedPlan(state, ym);
@@ -523,6 +544,7 @@
       ${current && !result ? html`<div class="card">
         <div class="row between"><h3>Current plan · ${current.label}</h3>${stale ? html`<span class="pill warn"><span class="glyph">!</span>Out of date</span>` : html`<span class="pill ok"><span class="glyph">✓</span>Up to date</span>`}</div>
         <${Strip} days=${current.days} /><${Metrics} m=${current.metrics} />
+        <${TravelDates} journeys=${current.journeys} state=${state} today=${today} />
         <ul class="why">${current.explanation.map((t) => html`<li>${t}</li>`)}${(current.warnings || []).map((t) => html`<li style="color:var(--warn)">${t.replace(/(\d{4}-\d{2}-\d{2})/, (m) => fDay(m))}</li>`)}</ul>
         <span class="tiny muted">Saved ${fDay(current.createdAt.slice(0, 10))}</span>
         <button class=${"btn block " + (stale ? "primary" : "")} onClick=${run}>${stale ? "Review an updated plan" : "Make a new plan"}</button>
@@ -547,6 +569,7 @@
         <div class="plans">${result.plans.map((p, i) => html`<button class="plan-card" aria-pressed=${String(pick === i)} onClick=${() => setPick(i)}>
           <div class="row between"><h3>${p.label}${i === 0 ? html` <span class="pill info" style="margin-left:6px">Recommended</span>` : null}</h3><span class="small muted">${p.metrics.estCost ? "≈ " + rupees(p.metrics.estCost) : ""}</span></div>
           <${Strip} days=${p.days} /><${Metrics} m=${p.metrics} />
+          <${TravelDates} journeys=${p.journeys} state=${state} today=${today} />
           ${pick === i ? html`<ul class="why">${p.explanation.map((t) => html`<li>${t}</li>`)}</ul>` : null}
         </button>`)}</div>
         <div class="legend"><span><i class="sw" style="background:var(--blr)"></i>Bengaluru</span><span><i class="sw" style="background:var(--hyd);opacity:.6"></i>Hyderabad</span><span><i class="sw" style="background:var(--blr);position:relative"></i>with dot = office day</span></div>
@@ -556,7 +579,8 @@
             <li>Holidays ${counting.holidaysReduceRequirement ? "reduce" : "do not reduce"} the requirement. Leave ${counting.leaveReducesRequirement ? "reduces" : "does not reduce"} it.</li>
             <li>Work trips ${counting.businessTravelCountsAsWFO ? "count" : "do not count"} as office days. Partial weeks at month edges are ${counting.partialWeeks === "prorate" ? "prorated" : counting.partialWeeks === "ignore" ? "ignored" : "counted in full"}.</li>
             <li>Journeys are overnight; at least ${plural(state.prefs.minStayNights, "night")} per Bengaluru stay preferred.</li>
-            <li>Booked and waitlisted journeys are kept exactly as they are. Past days and logged office days are kept.</li>
+            <li>${state.prefs.holidaysAtHome !== false ? "Weekday holidays are spent at home in Hyderabad, unless a ticket or must-attend event says otherwise." : "Weekday holidays can be spent in either city."}</li>
+            <li>Booked, waitlisted and completed journeys are kept exactly as they are. Past days and logged office days are kept.</li>
           </ul><button class="link" onClick=${() => go("more", "rules")}>Change rules or priorities</button></details>
         <div class="btn-row"><button class="btn primary" onClick=${() => setConfirm(true)}>Use ${chosen.label.toLowerCase()} plan</button><button class="btn" onClick=${() => setResult(null)}>Cancel</button></div>
       ` : null}
@@ -859,6 +883,7 @@
           <${Field} label="Start of month location" id="p-start" hint="Used when there's no plan for the previous month."><select id="p-start" value=${p.startLocation} onChange=${(e) => setP("startLocation", e.target.value)}><option value="HYD">Hyderabad</option><option value="BLR">Bengaluru</option></select></${Field}>
           <${Field} label="Usual mode" id="p-mode"><select id="p-mode" value=${p.defaultMode} onChange=${(e) => setP("defaultMode", e.target.value)}><option value="train">Train</option><option value="bus">Bus</option><option value="flight">Flight</option><option value="car">Car</option></select></${Field}>
         </div>
+        <label class="check"><input type="checkbox" id="p-holhome" checked=${p.holidaysAtHome !== false} onChange=${(e) => setP("holidaysAtHome", e.target.checked)} />Spend weekday holidays at home in Hyderabad</label>
         <div class="field"><span class="label">Preferred departure days</span><${DaysPick} name="p-days" value=${p.preferredTravelDays} onChange=${(v) => setP("preferredTravelDays", v)} /><span class="hint">Overnight journeys leave on the evening of these days.</span></div>
         <div class="grid2">
           <${Field} label="Shortest Bengaluru stay (nights)" id="p-stay"><input id="p-stay" type="number" min="0" max="7" value=${p.minStayNights} onInput=${(e) => setP("minStayNights", Math.max(0, Math.min(7, Number(e.target.value) || 0)))} /></${Field}>

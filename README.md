@@ -49,11 +49,11 @@ Works the same on Windows. No Docker needed, but `docker run --rm -p 8080:80 -v 
 
 The planner looks at every day of the month and decides where you are (Bengaluru or Hyderabad) and, on Bengaluru working days, whether you go to the office. Journeys are overnight, between two days.
 
-**Hard rules (never traded away):** monthly and weekly minimums, fixed office weekdays, required on-site dates, fixed WFH weekdays, holidays, leave and work trips, must-attend events, booked or waitlisted journeys, and no-travel dates. If these can't all be met, the app lists which ones conflict instead of guessing.
+**Hard rules (never traded away):** monthly and weekly minimums, fixed office weekdays, required on-site dates, fixed WFH weekdays, holidays, leave and work trips, must-attend events, booked, waitlisted or completed journeys, and no-travel dates. Weekday holidays are spent at home in Hyderabad unless a ticket or must-attend event says otherwise (switch off in Rules → Travel). If these can't all be met, the app lists which ones conflict instead of guessing.
 
 **Preferences (weighted, adjustable in Rules → Planning priorities):** fewer trips, time with your daughter when she's free in Bengaluru, weekends and weekdays at home, avoiding very short stays, travelling on preferred days.
 
-It produces three plans (Balanced, Fewest trips, Most family time), drops duplicates, explains each, and asks you to choose when they really differ. Nothing is saved, booked or cancelled until you confirm.
+It produces three plans (Balanced, Fewest trips, Most family time), drops duplicates, lists each plan's suggested travel dates with a book-by date, explains each, and asks you to choose when they really differ. Nothing is saved, booked or cancelled until you confirm.
 
 Mid-month, days already past stay as they were. Only days you **log** as Office count as completed; a planned day never counts. If the days left can't reach a minimum, you get the best possible plan plus a warning.
 

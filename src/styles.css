@@ -299,3 +299,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cell .code { font-size: 8.5px; }
 }
+
+/* suggested travel list on plan cards */
+.trips { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sunk); }
+.trip-row { display: grid; grid-template-columns: 92px auto 1fr; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.trip-row .trip-date { font-size: 12.5px; font-weight: 600; }
+.trip-row .trip-note { text-align: right; min-width: 0; }
+@media (max-width: 380px) { .trip-row { grid-template-columns: 1fr auto; } .trip-row .trip-note { grid-column: 1 / -1; text-align: left; } }

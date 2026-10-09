@@ -292,7 +292,7 @@
     const forced = new Map();
     const conflicts = [];
     const locked = (state.journeys || []).filter((j) =>
-      ["booked", "waitlisted"].includes(j.status)
+      ["booked", "waitlisted", "completed"].includes(j.status)
     );
     const put = (date, loc, j) => {
       if (forced.has(date) && forced.get(date) !== loc)
@@ -323,7 +323,7 @@
   function planMonth(ym, state, opts) {
     opts = opts || {};
     const prefs = Object.assign(
-      { startLocation: "HYD", minStayNights: 2, preferredTravelDays: [0, 5], endLocation: null },
+      { startLocation: "HYD", minStayNights: 2, preferredTravelDays: [0, 5], endLocation: null, holidaysAtHome: true },
       state.prefs || {}
     );
     const w = Object.assign({}, DEFAULT_WEIGHTS, (state.prefs && state.prefs.weights) || {}, opts.weights || {});
@@ -403,7 +403,9 @@
       if (fx) return !d.pinnedLocation || d.pinnedLocation === loc;
       if (d.mustOffice && loc !== "BLR") return false;
       if (d.pinnedLocation && d.pinnedLocation !== loc) return false;
-      if (forced.has(d.date) && forced.get(d.date) !== loc) return false;
+      if (forced.has(d.date)) return forced.get(d.date) === loc;
+      // Weekday holidays at home, unless a ticket or a must-attend event says otherwise.
+      if (prefs.holidaysAtHome && d.holiday && !isWeekend(d.date) && !d.pinnedLocation && loc !== "HYD") return false;
       return true;
     }
     function officeOK(i, loc, office) {
@@ -536,6 +538,8 @@
     const daughterWindow = plan.days.filter((d) => familyOn(state, d.date, "BLR").length > 0).length;
     const hydDays = plan.days.filter((d) => d.location === "HYD").length;
     const hydWeekends = plan.days.filter((d) => d.location === "HYD" && isWeekend(d.date)).length;
+    const hol = plan.days.filter((d) => d.mode === "holiday" && !isWeekend(d.date));
+    const holidaysHome = hol.filter((d) => d.location === "HYD").length;
     const cost = (state.prefs && state.prefs.tripCost) || 0;
     return {
       wfo,
@@ -543,6 +547,8 @@
       daughterDays,
       daughterWindow,
       hydDays,
+      weekdayHolidays: hol.length,
+      holidaysHome,
       hydWeekends,
       estCost: plan.journeys.length * cost,
     };
@@ -607,6 +613,12 @@
     if (m.daughterWindow)
       lines.push(`In Bengaluru for ${m.daughterDays} of ${m.daughterWindow} days your daughter is available.`);
     lines.push(`${m.hydWeekends} weekend ${m.hydWeekends === 1 ? "day" : "days"} at home in Hyderabad.`);
+    if (m.weekdayHolidays)
+      lines.push(
+        m.holidaysHome === m.weekdayHolidays
+          ? `${m.weekdayHolidays === 1 ? "The weekday holiday is" : `All ${m.weekdayHolidays} weekday holidays are`} spent at home in Hyderabad.`
+          : `${m.holidaysHome} of ${m.weekdayHolidays} weekday holidays at home; a ticket or event keeps you in Bengaluru for the rest.`
+      );
     return lines;
   }
 
@@ -712,7 +724,7 @@
       family: (state.family || []).filter((f) => touches(f.start, f.end)).map((f) => [f.person, f.start, f.end, f.status, f.location]),
       journeys: (state.journeys || []).filter((j) => ["booked", "waitlisted"].includes(j.status)).map((j) => [j.date, j.from, j.to, j.status]),
       counting: state.counting || {},
-      prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights] : null,
+      prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome] : null,
     };
     const str = JSON.stringify(pick);
     let h = 2166136261;

@@ -292,11 +292,11 @@
     const forced = new Map();
     const conflicts = [];
     const locked = (state.journeys || []).filter((j) =>
-      ["booked", "waitlisted", "completed"].includes(j.status)
+      ["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled")
     );
     const put = (date, loc, j) => {
       if (forced.has(date) && forced.get(date) !== loc)
-        conflicts.push({ date, text: `Two fixed journeys disagree about where you are on ${date}.`, journey: j });
+        conflicts.push({ date, journey: j });
       forced.set(date, loc);
     };
     for (const j of locked) {
@@ -329,7 +329,19 @@
     const w = Object.assign({}, DEFAULT_WEIGHTS, (state.prefs && state.prefs.weights) || {}, opts.weights || {});
     const days = classifyMonth(ym, state);
     const req = requirements(ym, state, days);
-    const { forced, conflicts: forcedConflicts } = forcedLocations(state, ym);
+    // Trips the user fixed while adjusting this plan count like booked ones.
+    const pinned = (opts.pinTrips || []).map((j) => Object.assign({}, j, { status: "booked" }));
+    const { forced, conflicts: forcedConflicts } = forcedLocations(
+      Object.assign({}, state, { journeys: (state.journeys || []).concat(pinned) }),
+      ym
+    );
+    const noTravel = new Set(opts.noTravel || []);
+    if (forcedConflicts.length)
+      return {
+        feasible: false,
+        issues: [{ date: forcedConflicts[0].date, text: `That clashes with another fixed trip around ${forcedConflicts[0].date}: you'd need to be in both cities at once.` }],
+        requirements: req,
+      };
     const N = days.length;
     const LOCS = ["BLR", "HYD"];
 
@@ -432,7 +444,7 @@
       const bk = new Int32Array(SIZE).fill(-1);
       const bo = new Uint8Array(SIZE);
       const depDate = i === 0 ? addDays(days[0].date, -1) : days[i - 1].date;
-      const depBlackout = i > 0 && days[i - 1].blackout;
+      const depBlackout = (i > 0 && days[i - 1].blackout) || noTravel.has(depDate);
       const newWeek = i === 0 || weekEnd[i - 1];
       for (let k = 0; k < SIZE; k++) {
         const c0 = cur[k];
@@ -563,7 +575,14 @@
     const seen = new Set();
     let infeasible = null;
     for (const [id, prof] of Object.entries(PROFILES)) {
-      const p = planMonth(ym, state, { weights: prof.weights, startLocation: opts.startLocation, fixedDays: opts.fixedDays, today: opts.today });
+      const p = planMonth(ym, state, {
+        weights: prof.weights,
+        startLocation: opts.startLocation,
+        fixedDays: opts.fixedDays,
+        today: opts.today,
+        pinTrips: opts.pinTrips,
+        noTravel: opts.noTravel,
+      });
       if (!p.feasible) {
         infeasible = p;
         continue;
@@ -714,7 +733,10 @@
 
   // ---------------------------------------------------------------- replanning
   /** Stable fingerprint of everything that can change a plan for a month. */
-  function inputsFingerprint(ym, state) {
+  // `plan` (optional): fixed journeys that match the plan's own trips don't
+  // count, so booking or completing a suggested trip doesn't make it stale.
+  function inputsFingerprint(ym, state, plan) {
+    const planTrips = new Set(((plan && plan.journeys) || []).map((j) => `${j.date}|${j.from}|${j.to}`));
     const monthStart = ym + "-01";
     const monthEnd = monthDays(ym).slice(-1)[0];
     const touches = (s, e) => !(e && e < monthStart) && !(s > monthEnd);
@@ -722,7 +744,7 @@
       policies: (state.policies || []).map((p) => [p.type, p.value, p.weekdays, p.date, p.effectiveFrom, p.effectiveTo, p.active]),
       calendar: (state.calendar || []).filter((c) => touches(c.start, c.end || c.start)).map((c) => [c.category, c.start, c.end, c.location, c.mustAttend]),
       family: (state.family || []).filter((f) => touches(f.start, f.end)).map((f) => [f.person, f.start, f.end, f.status, f.location]),
-      journeys: (state.journeys || []).filter((j) => ["booked", "waitlisted"].includes(j.status)).map((j) => [j.date, j.from, j.to, j.status]),
+      journeys: (state.journeys || []).filter((j) => (["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled")) && !planTrips.has(`${j.date}|${j.from}|${j.to}`)).map((j) => [j.date, j.from, j.to, j.status, !!j.locked]),
       counting: state.counting || {},
       prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome] : null,
     };

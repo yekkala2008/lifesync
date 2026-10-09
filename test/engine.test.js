@@ -318,3 +318,59 @@ test("completed journeys fix where you were", () => {
   assert.equal(p.days.find((d) => d.date === "2026-11-03").location, "HYD");
   assert.equal(p.days.find((d) => d.date === "2026-11-04").location, "BLR");
 });
+
+test("moving a suggested trip re-plans the month around it", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }] });
+  const before = E.planMonth("2026-11", s);
+  const first = before.journeys.find((j) => j.from === "HYD");
+  const moved = { date: E.addDays(first.date, 1), from: "HYD", to: "BLR" };
+  const after = E.planMonth("2026-11", s, { pinTrips: [moved], noTravel: [first.date] });
+  assert.ok(after.feasible);
+  assert.ok(after.journeys.some((j) => j.date === moved.date && j.from === "HYD"));
+  assert.ok(!after.journeys.some((j) => j.date === first.date));
+  for (const w of after.requirements.weeks) {
+    const n = after.days.filter((d) => w.dates.includes(d.date) && d.mode === "wfo").length;
+    assert.ok(n >= w.required);
+  }
+});
+
+test("a trip the user fixed in Travel stays fixed and changes the fingerprint", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }] });
+  const fp0 = E.inputsFingerprint("2026-11", s);
+  s.journeys.push({ date: "2026-11-15", from: "HYD", to: "BLR", status: "proposed", locked: true });
+  assert.notEqual(E.inputsFingerprint("2026-11", s), fp0);
+  const p = E.planMonth("2026-11", s);
+  assert.equal(p.days.find((d) => d.date === "2026-11-15").location, "HYD");
+  assert.equal(p.days.find((d) => d.date === "2026-11-16").location, "BLR");
+});
+
+test("a change that breaks a rule is reported, not applied", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 5 }] });
+  const p = E.planMonth("2026-11", s, { pinTrips: [{ date: "2026-11-10", from: "BLR", to: "HYD" }] });
+  assert.equal(p.feasible, false);
+  assert.ok(p.issues.length > 0);
+});
+
+test("booking or completing a trip the plan suggested doesn't make the plan stale", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }] });
+  const plan = E.planMonth("2026-11", s);
+  const fp = E.inputsFingerprint("2026-11", s, plan);
+  const j = plan.journeys[0];
+  s.journeys.push({ date: j.date, from: j.from, to: j.to, status: "booked" });
+  assert.equal(E.inputsFingerprint("2026-11", s, plan), fp);
+  s.journeys[0].status = "completed";
+  assert.equal(E.inputsFingerprint("2026-11", s, plan), fp);
+  s.journeys.push({ date: "2026-11-25", from: "HYD", to: "BLR", status: "booked" }); // not in plan
+  assert.notEqual(E.inputsFingerprint("2026-11", s, plan), fp);
+});
+
+test("moving a trip onto the same evening as a booked trip is refused with a reason", () => {
+  const s = base({
+    policies: [{ type: "weeklyMin", value: 2 }],
+    journeys: [{ date: "2026-11-15", from: "HYD", to: "BLR", status: "booked" }],
+  });
+  const p = E.planMonth("2026-11", s, { pinTrips: [{ date: "2026-11-15", from: "BLR", to: "HYD" }] });
+  assert.equal(p.feasible, false);
+  assert.match(p.issues[0].text, /clashes with another fixed trip/);
+  assert.equal(p.issues.length, 1);
+});

@@ -53,7 +53,7 @@ The planner looks at every day of the month and decides where you are (Bengaluru
 
 **Preferences (weighted, adjustable in Rules → Planning priorities):** fewer trips, time with your daughter when she's free in Bengaluru, weekends and weekdays at home, avoiding very short stays, travelling on preferred days.
 
-It produces three plans (Balanced, Fewest trips, Most family time), drops duplicates, lists each plan's suggested travel dates with a book-by date, explains each, and asks you to choose when they really differ. Nothing is saved, booked or cancelled until you confirm.
+It produces three plans (Balanced, Fewest trips, Most family time), drops duplicates, lists each plan's suggested travel dates with a book-by date (every trip is overnight: leave in the evening, arrive next morning), explains each, and asks you to choose when they really differ. Tap any suggested trip to move it to another evening, keep it, or skip travel that evening; the month re-plans around your change, or explains which rule it would break. Trips you set are saved as "Your date" and stay fixed in later replans. Nothing is saved, booked or cancelled until you confirm.
 
 Mid-month, days already past stay as they were. Only days you **log** as Office count as completed; a planned day never counts. If the days left can't reach a minimum, you get the best possible plan plus a warning.
 

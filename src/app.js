@@ -224,7 +224,7 @@
     const out = [];
     for (const ym of [ymOf(today), addMonths(ymOf(today), 1)]) {
       const p = acceptedPlan(state, ym);
-      if (p && p.fingerprint !== E.inputsFingerprint(ym, state)) out.push(ym);
+      if (p && p.fingerprint !== E.inputsFingerprint(ym, state, p)) out.push(ym);
     }
     return out;
   }
@@ -494,48 +494,115 @@
       <div><span class="v">${m.hydWeekends}</span><span class="k">home weekend days</span></div>
     </div>`;
   }
-  function TravelDates({ journeys, state, today }) {
+  const tripKey = (j) => `${j.date}|${j.from}|${j.to}`;
+  const arriveLabel = (j) => "arrive " + fmt(E.addDays(j.date, 1), { weekday: "short", day: "numeric" });
+
+  function TravelDates({ journeys, state, today, pins, onEdit }) {
     if (!journeys.length) return html`<p class="small muted">No travel needed.</p>`;
     const lead = state.prefs.bookingLeadDays != null ? state.prefs.bookingLeadDays : 21;
-    const booked = (state.journeys || []).filter((j) => ["booked", "waitlisted", "completed"].includes(j.status));
-    const match = (j) => booked.find((b) => b.date === j.date && b.from === j.from && b.to === j.to);
+    const fixed = (state.journeys || []).filter((j) => ["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled"));
+    const match = (j) => fixed.find((b) => tripKey(b) === tripKey(j));
+    const pinned = new Set((pins || []).map(tripKey));
     return html`<div class="trips">
-      <span class="eyebrow">Suggested travel</span>
+      <div class="row between"><span class="eyebrow">Suggested travel</span>${onEdit ? html`<span class="tiny muted">Tap a trip to change it</span>` : null}</div>
       ${journeys.map((j) => {
         const b = match(j);
         const past = j.date < today;
+        const mine = pinned.has(tripKey(j)) || (b && b.locked && b.status === "proposed");
         const bookBy = E.addDays(j.date, -lead);
-        return html`<div class="trip-row">
-          <span class="num trip-date">${fDay(j.date)}</span>
+        const note = b && b.status !== "proposed" ? (b.status === "completed" ? "Done" : b.status === "waitlisted" ? "Waitlisted" : "Booked") : past ? "Past" : `book by ${bookBy < today ? "now" : fDay(bookBy)}`;
+        const body = html`<span class="trip-when"><span class="num trip-date">${fDay(j.date)}</span><span class="tiny muted">evening → ${arriveLabel(j)}</span></span>
           <${Route} j=${j} />
-          <span class="tiny muted trip-note">${b ? (b.status === "completed" ? "Done" : b.status === "waitlisted" ? "Waitlisted" : "Booked") : past ? "Past" : `evening · book by ${bookBy < today ? "now" : fDay(bookBy)}`}</span>
-        </div>`;
+          <span class="trip-note">${mine ? html`<span class="pill info tiny-pill">Your date</span>` : null}<span class="tiny muted">${note}</span></span>`;
+        const editable = onEdit && !past && !(b && b.status !== "proposed");
+        return editable
+          ? html`<button type="button" class="trip-row trip-btn" onClick=${(e) => { e.stopPropagation(); onEdit(j); }} aria-label=${`Change ${fDay(j.date)} ${CITY[j.from]} to ${CITY[j.to]}`}>${body}</button>`
+          : html`<div class="trip-row">${body}</div>`;
       })}
     </div>`;
+  }
+
+  function TripSheet({ trip, month, today, onMove, onKeep, onSkip, onClose }) {
+    const [date, setDate] = useState(trip.date);
+    const monthStart = E.addDays(month + "-01", -1);
+    const first = today > monthStart ? today : monthStart;
+    const last = E.monthDays(month).slice(-1)[0];
+    const ok = date && date >= first && date <= last;
+    return html`<${Sheet} title=${`${CITY[trip.from]} → ${CITY[trip.to]}`} onClose=${onClose}>
+      <p class="small">Suggested for <strong>${fDay(trip.date)}</strong> evening, arriving ${arriveLabel(trip).replace("arrive ", "")} morning.</p>
+      <div class="card">
+        <h3>Move to another evening</h3>
+        <${Field} label="Leave on" id="t-date" hint=${`Any evening from ${fDay(first)} to ${fDay(last)}. LifeSync re-plans the rest of the month around it, including your office days and the return trip.`}><input id="t-date" type="date" min=${first} max=${last} value=${date} onInput=${(e) => setDate(e.target.value)} /></${Field}>
+        <button class="btn primary" disabled=${!ok || date === trip.date} onClick=${() => onMove(date)}>Move trip to ${ok && date !== trip.date ? fDay(date) : "this date"}</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onClick=${onKeep}>Keep ${fDay(trip.date)}</button>
+        <button class="btn" onClick=${onSkip}>Don't travel that evening</button>
+      </div>
+      <p class="tiny muted">Nothing is saved until you tap Save plan.</p>
+    </${Sheet}>`;
   }
 
   function PlanScreen({ state, today, month, setMonth, acceptPlan, go }) {
     const ym = month;
     const current = acceptedPlan(state, ym);
-    const fp = E.inputsFingerprint(ym, state);
-    const stale = current && current.fingerprint !== fp;
+    const stale = current && current.fingerprint !== E.inputsFingerprint(ym, state, current);
+    const EMPTY_ADJ = { pins: [], noTravel: [] };
     const [result, setResult] = useState(null);
     const [pick, setPick] = useState(0);
     const [confirm, setConfirm] = useState(false);
-    useEffect(() => { setResult(null); setConfirm(false); setPick(0); }, [ym]);
+    const [adj, setAdj] = useState(EMPTY_ADJ);
+    const [history, setHistory] = useState([]);
+    const [editing, setEditing] = useState(null);
+    const [rejected, setRejected] = useState(null);
+    useEffect(() => { setResult(null); setConfirm(false); setPick(0); setAdj(EMPTY_ADJ); setHistory([]); setRejected(null); }, [ym]);
     const months = [ymOf(today), addMonths(ymOf(today), 1), addMonths(ymOf(today), 2)];
+    const compute = (a) => E.proposePlans(ym, state, { startLocation: startLocationFor(state, ym), fixedDays: fixedDaysFor(state, ym, today), today, pinTrips: a.pins, noTravel: a.noTravel });
     const run = () => {
-      const r = E.proposePlans(ym, state, { startLocation: startLocationFor(state, ym), fixedDays: fixedDaysFor(state, ym, today), today });
-      setResult(r);
+      setAdj(EMPTY_ADJ);
+      setHistory([]);
+      setRejected(null);
+      setResult(compute(EMPTY_ADJ));
       setPick(0);
       setConfirm(false);
     };
+    const applyAdj = (a, what) => {
+      const r = compute(a);
+      setEditing(null);
+      if (!r.feasible) { setRejected({ what, issues: r.issues }); return; }
+      const label = result && result.feasible ? result.plans[pick].profile : null;
+      setHistory([...history, adj]);
+      setAdj(a);
+      setRejected(null);
+      setResult(r);
+      const keep = r.plans.findIndex((p) => p.profile === label);
+      setPick(keep >= 0 ? keep : 0);
+    };
+    const without = (list, k) => list.filter((x) => tripKey(x) !== k);
+    const moveTrip = (j, date) => {
+      const pins = [...without(adj.pins, tripKey(j)), { date, from: j.from, to: j.to }];
+      const noTravel = [...new Set([...adj.noTravel.filter((d) => d !== date), j.date])].filter((d) => !pins.some((p) => p.date === d));
+      applyAdj({ pins, noTravel }, `Moving ${fDay(j.date)} to ${fDay(date)}`);
+    };
+    const keepTrip = (j) => applyAdj({ pins: [...without(adj.pins, tripKey(j)), { date: j.date, from: j.from, to: j.to }], noTravel: adj.noTravel.filter((d) => d !== j.date) }, `Keeping ${fDay(j.date)}`);
+    const skipTrip = (j) => applyAdj({ pins: adj.pins.filter((p) => p.date !== j.date), noTravel: [...new Set([...adj.noTravel, j.date])] }, `No travel on ${fDay(j.date)}`);
+    const undo = () => {
+      const prev = history[history.length - 1] || EMPTY_ADJ;
+      const r = compute(prev);
+      setHistory(history.slice(0, -1));
+      setAdj(prev);
+      setRejected(null);
+      setResult(r);
+    };
+    const changed = adj.pins.length + adj.noTravel.length > 0;
     const req = E.requirements(ym, state);
     const counting = req.counting;
     const chosen = result && result.feasible ? result.plans[pick] : null;
     const diff = chosen ? E.diffPlans(current, chosen) : null;
     const booked = (state.journeys || []).filter((j) => ["booked", "waitlisted"].includes(j.status));
-    const isBooked = (j) => booked.some((b) => b.date === j.date && b.from === j.from && b.to === j.to);
+    const isBooked = (j) => booked.some((b) => tripKey(b) === tripKey(j));
+    const isMine = (j) => adj.pins.some((p) => tripKey(p) === tripKey(j));
+    const selectCard = (i) => (e) => { if (e.type === "click" || e.key === "Enter" || e.key === " ") { e.preventDefault && e.type !== "click" && e.preventDefault(); setPick(i); } };
 
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">Smart plan</span><h1>Plan ${fMonth(ym)}</h1></div>
@@ -547,7 +614,7 @@
         <${TravelDates} journeys=${current.journeys} state=${state} today=${today} />
         <ul class="why">${current.explanation.map((t) => html`<li>${t}</li>`)}${(current.warnings || []).map((t) => html`<li style="color:var(--warn)">${t.replace(/(\d{4}-\d{2}-\d{2})/, (m) => fDay(m))}</li>`)}</ul>
         <span class="tiny muted">Saved ${fDay(current.createdAt.slice(0, 10))}</span>
-        <button class=${"btn block " + (stale ? "primary" : "")} onClick=${run}>${stale ? "Review an updated plan" : "Make a new plan"}</button>
+        <div class="btn-row"><button class=${"btn " + (stale ? "primary" : "")} onClick=${run}>${stale ? "Review an updated plan" : "Change travel dates"}</button>${stale ? null : html`<button class="btn" onClick=${run}>Make a new plan</button>`}</div>
       </div>` : null}
 
       ${!current && !result ? html`<div class="card">
@@ -565,24 +632,34 @@
         ${result.plans[0].warnings && result.plans[0].warnings.length ? html`<${Alert} tone="warn" title="Some days have already passed">
           <ul class="why">${result.plans[0].warnings.map((t) => html`<li>${t.replace(/(\d{4}-\d{2}-\d{2})/, (m) => fDay(m))}</li>`)}</ul>
           <p class="small">These plans make the most of the days left. If you went to the office on a day you didn't log, log it and plan again.</p></${Alert}>` : null}
-        <p class="small">${result.askUser ? "These options trade trips against family time in different ways. Pick the one that suits this month." : "One option stands out. Alternatives are shown for comparison."}</p>
-        <div class="plans">${result.plans.map((p, i) => html`<button class="plan-card" aria-pressed=${String(pick === i)} onClick=${() => setPick(i)}>
-          <div class="row between"><h3>${p.label}${i === 0 ? html` <span class="pill info" style="margin-left:6px">Recommended</span>` : null}</h3><span class="small muted">${p.metrics.estCost ? "≈ " + rupees(p.metrics.estCost) : ""}</span></div>
+        ${rejected ? html`<${Alert} tone="bad" title=${`${rejected.what} doesn't work`}>
+          <ul class="why">${rejected.issues.map((i) => html`<li>${i.text.replace(/(\d{4}-\d{2}-\d{2})/g, (m) => fDay(m))}</li>`)}</ul>
+          <p class="small">Your plan hasn't changed. Try another date.</p>
+          <div><button class="btn small" onClick=${() => setRejected(null)}>OK</button></div></${Alert}>` : null}
+        ${changed ? html`<div class="card changes">
+          <div class="row between"><h3>Your changes</h3><div class="row"><button class="link" onClick=${undo} disabled=${!history.length}>Undo</button><button class="link" onClick=${() => applyAdj(EMPTY_ADJ, "Clearing changes")}>Clear all</button></div></div>
+          ${adj.pins.map((p) => html`<div class="row between small"><span>Travel ${fDay(p.date)} evening · ${CITY[p.from]} → ${CITY[p.to]}</span><button class="icon-btn mini" aria-label="Remove this change" onClick=${() => applyAdj({ pins: without(adj.pins, tripKey(p)), noTravel: adj.noTravel }, "Removing that change")}>${I.close}</button></div>`)}
+          ${adj.noTravel.map((d) => html`<div class="row between small"><span>No travel ${fDay(d)} evening</span><button class="icon-btn mini" aria-label="Remove this change" onClick=${() => applyAdj({ pins: adj.pins, noTravel: adj.noTravel.filter((x) => x !== d) }, "Removing that change")}>${I.close}</button></div>`)}
+          <span class="tiny muted">Every option below respects these changes and still meets your office rules.</span>
+        </div>` : null}
+        <p class="small">${result.askUser ? "These options trade trips against family time in different ways. Pick one, then tap any trip to change its date." : "One option stands out. Tap any trip to change its date."}</p>
+        <div class="plans">${result.plans.map((p, i) => html`<div class="plan-card" role="button" tabindex="0" aria-pressed=${String(pick === i)} onClick=${selectCard(i)} onKeyDown=${selectCard(i)}>
+          <div class="row between"><h3>${p.label}${i === 0 && !changed ? html` <span class="pill info" style="margin-left:6px">Recommended</span>` : null}</h3><span class="small muted">${p.metrics.estCost ? "≈ " + rupees(p.metrics.estCost) : ""}</span></div>
           <${Strip} days=${p.days} /><${Metrics} m=${p.metrics} />
-          <${TravelDates} journeys=${p.journeys} state=${state} today=${today} />
+          <${TravelDates} journeys=${p.journeys} state=${state} today=${today} pins=${adj.pins} onEdit=${(j) => { setPick(i); setEditing(j); }} />
           ${pick === i ? html`<ul class="why">${p.explanation.map((t) => html`<li>${t}</li>`)}</ul>` : null}
-        </button>`)}</div>
+        </div>`)}</div>
         <div class="legend"><span><i class="sw" style="background:var(--blr)"></i>Bengaluru</span><span><i class="sw" style="background:var(--hyd);opacity:.6"></i>Hyderabad</span><span><i class="sw" style="background:var(--blr);position:relative"></i>with dot = office day</span></div>
         <details class="card"><summary class="small" style="cursor:pointer;font-weight:650">Assumptions used</summary>
           <ul class="why small">
             <li>${req.monthly.policy ? `Monthly minimum ${req.monthly.policy.value}, adjusted to ${req.monthly.required} for this month.` : "No monthly minimum."}</li>
             <li>Holidays ${counting.holidaysReduceRequirement ? "reduce" : "do not reduce"} the requirement. Leave ${counting.leaveReducesRequirement ? "reduces" : "does not reduce"} it.</li>
             <li>Work trips ${counting.businessTravelCountsAsWFO ? "count" : "do not count"} as office days. Partial weeks at month edges are ${counting.partialWeeks === "prorate" ? "prorated" : counting.partialWeeks === "ignore" ? "ignored" : "counted in full"}.</li>
-            <li>Journeys are overnight; at least ${plural(state.prefs.minStayNights, "night")} per Bengaluru stay preferred.</li>
+            <li>Journeys are overnight: you leave in the evening and arrive the next morning. At least ${plural(state.prefs.minStayNights, "night")} per Bengaluru stay preferred.</li>
             <li>${state.prefs.holidaysAtHome !== false ? "Weekday holidays are spent at home in Hyderabad, unless a ticket or must-attend event says otherwise." : "Weekday holidays can be spent in either city."}</li>
-            <li>Booked, waitlisted and completed journeys are kept exactly as they are. Past days and logged office days are kept.</li>
+            <li>Booked, waitlisted and completed journeys, and trips you fixed, are kept exactly as they are. Past days and logged office days are kept.</li>
           </ul><button class="link" onClick=${() => go("more", "rules")}>Change rules or priorities</button></details>
-        <div class="btn-row"><button class="btn primary" onClick=${() => setConfirm(true)}>Use ${chosen.label.toLowerCase()} plan</button><button class="btn" onClick=${() => setResult(null)}>Cancel</button></div>
+        <div class="btn-row"><button class="btn primary" onClick=${() => setConfirm(true)}>Use ${chosen.label.toLowerCase()} plan</button><button class="btn" onClick=${() => { setResult(null); setAdj(EMPTY_ADJ); setHistory([]); }}>Cancel</button></div>
       ` : null}
 
       ${confirm && chosen ? html`<div class="card raised">
@@ -595,12 +672,16 @@
         </div>` : null}
         <div class="diff-list">
           <strong class="small">Journeys</strong>
-          ${chosen.journeys.length ? chosen.journeys.map((j) => html`<div class="row small wrap"><span class="num" style="width:96px">${fDay(j.date)}</span><${Route} j=${j} />${isBooked(j) ? html`<span class="pill ok"><span class="glyph">✓</span>Already booked</span>` : html`<span class="pill neutral">Added as proposed</span>`}</div>`) : html`<span class="small muted">No journeys needed.</span>`}
+          ${chosen.journeys.length ? chosen.journeys.map((j) => html`<div class="row small wrap"><span class="num" style="width:96px">${fDay(j.date)}</span><${Route} j=${j} />${isBooked(j) ? html`<span class="pill ok"><span class="glyph">✓</span>Already booked</span>` : isMine(j) ? html`<span class="pill info">Your date · kept fixed</span>` : html`<span class="pill neutral">Added as proposed</span>`}</div>`) : html`<span class="small muted">No journeys needed.</span>`}
           ${diff.removedJourneys.filter((j) => !isBooked(j)).length ? html`<span class="small">Proposed journeys no longer needed will be removed: ${diff.removedJourneys.filter((j) => !isBooked(j)).map((j) => fDay(j.date)).join(", ")}</span>` : null}
+          ${adj.noTravel.length ? html`<span class="small">No-travel evenings saved to Holidays & leave: ${adj.noTravel.map(fDay).join(", ")}</span>` : null}
         </div>
         <p class="tiny muted">LifeSync never books, cancels or changes tickets. You record bookings yourself in Travel.</p>
-        <div class="btn-row"><button class="btn primary" onClick=${() => { acceptPlan(chosen, stale ? "Inputs changed" : current ? "Replanned" : "First plan"); setResult(null); setConfirm(false); }}>Save plan</button><button class="btn" onClick=${() => setConfirm(false)}>Back</button></div>
+        <div class="btn-row"><button class="btn primary" onClick=${() => { acceptPlan(chosen, stale ? "Inputs changed" : changed ? "Adjusted by you" : current ? "Replanned" : "First plan", adj); setResult(null); setConfirm(false); setAdj(EMPTY_ADJ); setHistory([]); }}>Save plan</button><button class="btn" onClick=${() => setConfirm(false)}>Back</button></div>
       </div>` : null}
+
+      ${editing ? html`<${TripSheet} trip=${editing} month=${ym} today=${today} onClose=${() => setEditing(null)}
+        onMove=${(d) => moveTrip(editing, d)} onKeep=${() => keepTrip(editing)} onSkip=${() => skipTrip(editing)} />` : null}
     </div>`;
   }
 
@@ -721,8 +802,8 @@
         const s = E.journeyState(j, today, state.prefs);
         return html`<button class="item" onClick=${() => openJourney(j.id)}>
           <div class="date" style="width:46px;text-align:center"><div class="tiny muted">${fmt(j.date, { month: "short" })}</div><div class="num" style="font-size:18px;font-weight:700">${Number(j.date.slice(8))}</div></div>
-          <div class="stack grow"><div class="row wrap"><${Route} j=${j} /><${Pill} map=${JSTATUS} k=${s.status} /></div>
-            <span class="small">${[j.depTime && "Departs " + j.depTime, j.mode, j.operator].filter(Boolean).join(" · ") || "Details not added"}</span>
+          <div class="stack grow"><div class="row wrap"><${Route} j=${j} /><${Pill} map=${JSTATUS} k=${s.status} />${j.locked && j.status === "proposed" ? html`<span class="pill info">Your date</span>` : null}</div>
+            <span class="small">${[j.depTime ? "Departs " + j.depTime : "Evening", arriveLabel(j), j.mode, j.operator].filter(Boolean).join(" · ")}</span>
             ${s.action ? html`<span class="tiny" style="color:var(--warn)">${s.action}</span>` : null}</div></button>`;
       })}</div>` : html`<div class="list"><div class="empty">${tab === "upcoming" ? "No upcoming journeys. Save a plan to get proposed journeys, or add one you've booked." : "Nothing here yet."}</div></div>`}
       <p class="tiny muted">LifeSync doesn't check live seat availability. Record what you booked, and it reminds you about booking dates, waitlists and departures.</p>
@@ -734,6 +815,7 @@
     const set = (k) => (e) => setJ(Object.assign({}, j, { [k]: e && e.target ? e.target.value : e }));
     const s = E.journeyState(j, today, state.prefs);
     const isNew = !journey || !journey.id;
+    const moved = journey && journey.id && (journey.date !== j.date || journey.from !== j.from);
     const arrDate = j.arrTime && j.depTime && j.arrTime < j.depTime ? E.addDays(j.date, 1) : j.date;
     return html`<${Sheet} title=${isNew ? "Add journey" : journeyLabel(j)} onClose=${onClose}>
       <div class="grid2">
@@ -751,6 +833,7 @@
       <${Field} label="Status" id="j-status"><select id="j-status" value=${j.status} onChange=${set("status")}>
         <option value="proposed">Proposed (idea, not booked)</option><option value="booked">Booked and confirmed</option><option value="waitlisted">Waitlisted / not confirmed</option><option value="completed">Travel completed</option><option value="cancelled">Changed / cancelled</option></select></${Field}>
       ${s.action ? html`<${Alert} tone=${s.status === "waitlisted" || s.status === "booking-due" ? "warn" : "info"}><p class="small">${s.action}</p></${Alert}>` : null}
+      ${j.status === "proposed" ? html`<label class="check"><input type="checkbox" id="j-lock" checked=${!!j.locked || moved} disabled=${moved} onChange=${(e) => setJ(Object.assign({}, j, { locked: e.target.checked }))} />Keep this date when replanning${moved ? " (you changed the date)" : ""}</label>` : null}
       <div class="grid2">
         <${Field} label="Operator / train" id="j-op"><input id="j-op" type="text" value=${j.operator} onInput=${set("operator")} placeholder="e.g. train name or bus operator" /></${Field}>
         <${Field} label="PNR / booking ref" id="j-ref"><input id="j-ref" type="text" value=${j.ref} onInput=${set("ref")} /></${Field}>
@@ -763,7 +846,7 @@
           ${j.status === "proposed" ? html`<a class="btn small" target="_blank" rel="noopener" href=${gcalLink(`Book ticket: ${journeyLabel(j)}`, `Journey on ${fDay(j.date)}. Book by ${fDay(s.bookBy)}.`, s.bookBy, null, true)}>Booking reminder</a>` : null}
           <a class="btn small" target="_blank" rel="noopener" href=${j.depTime ? gcalLink(`${journeyLabel(j)}${j.ref ? " · PNR " + j.ref : ""}`, [j.operator, j.notes].filter(Boolean).join("\n"), { date: j.date, time: j.depTime }, { date: arrDate, time: j.arrTime || j.depTime }) : gcalLink(journeyLabel(j), "", j.date, null, true)}>Departure in calendar</a>
         </div></div>` : null}
-      <div class="btn-row"><button class="btn primary" onClick=${() => onSave(Object.assign({}, j, { id: j.id || uid(), cost: j.cost === "" ? "" : Number(j.cost) }))}>${isNew ? "Add journey" : "Save changes"}</button></div>
+      <div class="btn-row"><button class="btn primary" onClick=${() => onSave(Object.assign({}, j, { id: j.id || uid(), cost: j.cost === "" ? "" : Number(j.cost), locked: j.status === "proposed" ? !!(j.locked || moved || isNew) : j.locked }))}>${isNew ? "Add journey" : "Save changes"}</button></div>
       ${!isNew ? html`<${ConfirmButton} label="Delete journey" onConfirm=${() => onDelete(j.id)} />` : null}
     </${Sheet}>`;
   }
@@ -1169,9 +1252,23 @@
       update("attendance", a);
       toast(v ? `${fDay(iso)} logged as ${{ wfo: "office", wfh: "home", leave: "leave", business: "work trip" }[v]}` : "Log cleared");
     };
-    const acceptPlan = (plan, reason) => {
+    const acceptPlan = (plan, reason, adj) => {
+      adj = adj || { pins: [], noTravel: [] };
       const ym = plan.month;
-      const fp = E.inputsFingerprint(ym, state);
+      const key = (j) => `${j.date}|${j.from}|${j.to}`;
+      const pinKeys = new Set(adj.pins.map(key));
+      const newKeys = new Set(plan.journeys.map(key));
+      let journeys = (state.journeys || []).filter((j) => !(j.status === "proposed" && j.planMonth === ym && !newKeys.has(key(j)) && !j.locked));
+      journeys = journeys.map((j) => (j.status === "proposed" && pinKeys.has(key(j)) ? Object.assign({}, j, { locked: true }) : j));
+      const have = new Set(journeys.filter((j) => j.status !== "cancelled").map(key));
+      for (const j of plan.journeys)
+        if (!have.has(key(j)))
+          journeys.push({ id: uid(), from: j.from, to: j.to, date: j.date, depTime: "", arrTime: "", mode: state.prefs.defaultMode, operator: "", ref: "", cost: "", status: "proposed", notes: "", planMonth: ym, locked: pinKeys.has(key(j)), example: !!state.meta.example });
+      let calendar = state.calendar || [];
+      const existingBlack = new Set(calendar.filter((c) => c.category === "blackout").map((c) => c.start));
+      const addBlack = adj.noTravel.filter((d) => !existingBlack.has(d)).map((d) => ({ id: uid(), category: "blackout", label: "No travel this evening (set in plan)", start: d, end: "" }));
+      if (addBlack.length) calendar = calendar.concat(addBlack);
+      const fp = E.inputsFingerprint(ym, Object.assign({}, state, { journeys, calendar }), plan);
       const version = {
         id: uid(), month: ym, createdAt: new Date().toISOString(), profile: plan.profile, label: plan.label,
         days: plan.days, journeys: plan.journeys, explanation: plan.explanation, metrics: plan.metrics, warnings: plan.warnings || [],
@@ -1182,15 +1279,8 @@
       const forMonth = plans.filter((p) => p.month === ym).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       const drop = new Set(forMonth.slice(6).map((p) => p.id));
       plans = plans.filter((p) => !drop.has(p.id));
-      const key = (j) => `${j.date}|${j.from}|${j.to}`;
-      const newKeys = new Set(plan.journeys.map(key));
-      let journeys = (state.journeys || []).filter((j) => !(j.status === "proposed" && j.planMonth === ym && !newKeys.has(key(j))));
-      const have = new Set(journeys.filter((j) => j.status !== "cancelled").map(key));
-      for (const j of plan.journeys)
-        if (!have.has(key(j)))
-          journeys.push({ id: uid(), from: j.from, to: j.to, date: j.date, depTime: "", arrTime: "", mode: state.prefs.defaultMode, operator: "", ref: "", cost: "", status: "proposed", notes: "", planMonth: ym, example: !!state.meta.example });
-      setState((s) => Object.assign({}, s, { plans, journeys }));
-      if (store) { store.save("plans", plans); store.save("journeys", journeys); }
+      setState((s) => Object.assign({}, s, { plans, journeys, calendar }));
+      if (store) { store.save("plans", plans); store.save("journeys", journeys); if (addBlack.length) store.save("calendar", calendar); }
       toast(`${fMonthShort(ym)} plan saved`);
     };
     const finishSetup = (s, example) => {
@@ -1200,10 +1290,11 @@
         const r = E.proposePlans(ym, s, { startLocation: s.prefs.startLocation, fixedDays: fixedDaysFor(s, ym, today), today });
         if (r.feasible) {
           const p = r.plans[0];
-          s.plans = [{ id: uid(), month: ym, createdAt: new Date().toISOString(), profile: p.profile, label: p.label, days: p.days, journeys: p.journeys, explanation: p.explanation, metrics: p.metrics, fingerprint: E.inputsFingerprint(ym, s), accepted: true, reason: "Example", example: true }];
+          s.plans = [{ id: uid(), month: ym, createdAt: new Date().toISOString(), profile: p.profile, label: p.label, days: p.days, journeys: p.journeys, explanation: p.explanation, metrics: p.metrics, fingerprint: "", accepted: true, reason: "Example", example: true }];
           const key = (j) => `${j.date}|${j.from}|${j.to}`;
           const have = new Set(s.journeys.map(key));
           for (const j of p.journeys) if (!have.has(key(j))) s.journeys.push({ id: uid(), from: j.from, to: j.to, date: j.date, depTime: "", arrTime: "", mode: "train", operator: "", ref: "", cost: "", status: j.date < today ? "completed" : "proposed", notes: "", planMonth: ym, example: true });
+          s.plans[0].fingerprint = E.inputsFingerprint(ym, s, s.plans[0]);
         }
       }
       replaceState(s);

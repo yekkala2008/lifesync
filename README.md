@@ -56,7 +56,9 @@ The planner looks at every day of the month and decides where you are (Bengaluru
 
 It produces three plans (Balanced, Fewest trips, Most family time), drops duplicates, lists each plan's suggested travel dates with a book-by date (every trip is overnight: leave in the evening, arrive next morning), explains each, and asks you to choose when they really differ. Tap any suggested trip to move it to another evening, keep it, or skip travel that evening; the month re-plans around your change, or explains which rule it would break. Trips you set are saved as "Your date" and stay fixed in later replans. Nothing is saved, booked or cancelled until you confirm.
 
-Mid-month, days already past stay as they were. Only days you **log** as Office count as completed; a planned day never counts. If the days left can't reach a minimum, you get the best possible plan plus a warning.
+Mid-month, days already past stay as they were. Only days you **log** as Office count as completed; a planned day never counts. In the office city you can log Office or Home on any day; days in the home city are logged as Home automatically. If working from home leaves you short, Today offers an updated plan. Actual totals show as they are, above or below the target.
+
+Office and home cities are settings (Rules → Your places). Internally they are two fixed slots, so renaming never touches saved data. If the days left can't reach a minimum, you get the best possible plan plus a warning.
 
 ### Counting rules to confirm with your company
 

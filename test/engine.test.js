@@ -403,3 +403,32 @@ test("two office-closed days reduce the monthly requirement", () => {
   s.counting = { closedDaysReduceRequirement: false };
   assert.equal(E.requirements("2026-11", s).monthly.required, 12);
 });
+
+test("explanations use your own city names", () => {
+  const s = base({
+    policies: [{ type: "weeklyMin", value: 2 }],
+    family: [{ person: "Daughter", location: "BLR", start: "2026-11-14", end: "2026-11-15", status: "available" }],
+  });
+  s.prefs.officeCity = { name: "Chennai" };
+  s.prefs.homeCity = { name: "Vizag" };
+  const p = E.planMonth("2026-11", s);
+  const text = E.explain(p, s).join(" ");
+  assert.match(text, /In Chennai for/);
+  assert.match(text, /at home in Vizag/);
+  assert.doesNotMatch(text, /Bengaluru|Hyderabad/);
+});
+
+test("working from home on a planned office day lowers the actual count and the projection", () => {
+  const s = base({ policies: [{ type: "monthlyMin", value: 4 }] });
+  const plan = E.planMonth("2026-11", s);
+  const office = plan.days.filter((d) => d.mode === "wfo").map((d) => d.date);
+  s.attendance = { [office[0]]: "wfo", [office[1]]: "wfh" };
+  const c = E.compliance("2026-11", s, plan, E.addDays(office[1], 1));
+  assert.equal(c.monthly.completed, 1);
+  assert.equal(c.monthly.projected, 3); // 1 done + 2 still planned
+  assert.equal(c.monthly.status, "at-risk");
+  s.attendance = Object.fromEntries(office.concat(["2026-11-30"]).map((d) => [d, "wfo"]));
+  const over = E.compliance("2026-11", s, plan, "2026-12-01");
+  assert.equal(over.monthly.completed, 5); // more than required shows as it is
+  assert.equal(over.monthly.status, "met");
+});

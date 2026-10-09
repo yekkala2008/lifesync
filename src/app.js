@@ -26,7 +26,20 @@
   const fMonth = (ym) => fmt(ym + "-01", { month: "long", year: "numeric" });
   const fMonthShort = (ym) => fmt(ym + "-01", { month: "long" });
   const uid = () => Math.random().toString(36).slice(2, 10);
+  // Two place slots: "BLR" = office city, "HYD" = home city. The keys never change
+  // (so saved data stays valid); the names and codes shown come from your settings.
   const CITY = { BLR: "Bengaluru", HYD: "Hyderabad" };
+  const CODE = { BLR: "BLR", HYD: "HYD" };
+  function setPlaces(prefs) {
+    const o = (prefs && prefs.officeCity) || {};
+    const h = (prefs && prefs.homeCity) || {};
+    CITY.BLR = (o.name || "").trim() || "Bengaluru";
+    CITY.HYD = (h.name || "").trim() || "Hyderabad";
+    CODE.BLR = ((o.code || "").trim() || CITY.BLR.slice(0, 3)).toUpperCase().slice(0, 4);
+    CODE.HYD = ((h.code || "").trim() || CITY.HYD.slice(0, 3)).toUpperCase().slice(0, 4);
+    if (!o.code && !o.name) CODE.BLR = "BLR";
+    if (!h.code && !h.name) CODE.HYD = "HYD";
+  }
   const other = (c) => (c === "BLR" ? "HYD" : "BLR");
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b || a + "s"}`;
   const rupees = (n) => (n ? "₹" + Number(n).toLocaleString("en-IN") : "—");
@@ -132,7 +145,7 @@
     <circle cx="7" cy="20" r="4.5" fill="var(--hyd)"/><circle cx="21" cy="8" r="4.5" fill="var(--blr)"/></svg>`;
 
   // ------------------------------------------------------------ small components
-  const City = ({ c, long }) => html`<span class=${"city " + c}>${long ? CITY[c] : c}</span>`;
+  const City = ({ c, long }) => html`<span class=${"city " + c} title=${CITY[c]}>${long ? CITY[c] : CODE[c]}</span>`;
   const Route = ({ j }) => html`<span class="route"><${City} c=${j.from} /><span class="arrow" aria-label="to">→</span><${City} c=${j.to} /></span>`;
 
   const JSTATUS = {
@@ -213,8 +226,9 @@
     const fx = {};
     const plan = acceptedPlan(state, ym);
     for (const iso of E.monthDays(ym)) {
-      if (iso >= today) break;
+      if (iso > today) break;
       const att = state.attendance[iso];
+      if (iso === today && !att) continue; // today is still open unless you've logged it
       const pd = plan && plan.days.find((d) => d.date === iso);
       if (att === "wfo") fx[iso] = { location: "BLR", office: true };
       else if (pd) fx[iso] = { location: pd.location, office: false };
@@ -230,6 +244,33 @@
     }
     return out;
   }
+  // What actually happened on a day. Logged entries win. Otherwise, a past working
+  // day planned in the home city, or planned as work-from-home, counts as
+  // work from home automatically. Planned office days need you to confirm.
+  function actualFor(state, iso, today) {
+    const att = state.attendance[iso];
+    if (att) return { mode: att, auto: false };
+    if (iso > today) return null;
+    const pd = planDay(state, iso);
+    if (iso === today && !(pd && pd.location === "HYD")) return null; // office-city day still open
+    if (pd && (pd.mode === "wfh" || pd.mode === "closed")) return { mode: "wfh", auto: true, location: pd.location };
+    return null;
+  }
+  function actualSummary(state, ym, today) {
+    const out = { wfo: 0, wfhOffice: 0, wfhHome: 0, leave: 0, business: 0, unconfirmed: 0 };
+    for (const iso of E.monthDays(ym)) {
+      if (iso > today) break;
+      const a = actualFor(state, iso, today);
+      const pd = planDay(state, iso);
+      if (!a) { if (pd && pd.mode === "wfo" && iso < today) out.unconfirmed++; continue; }
+      if (a.mode === "wfo") out.wfo++;
+      else if (a.mode === "wfh") (pd && pd.location === "BLR" ? out.wfhOffice++ : out.wfhHome++);
+      else if (a.mode === "leave") out.leave++;
+      else if (a.mode === "business") out.business++;
+    }
+    return out;
+  }
+
   function unloggedPast(state, today) {
     const ym = ymOf(today);
     const p = acceptedPlan(state, ym);
@@ -239,10 +280,11 @@
   function journeyLabel(j) {
     return `${CITY[j.from]} → ${CITY[j.to]}`;
   }
-  function gcalLink(title, details, start, end, allDay) {
+  function gcalLink(title, details, start, end, allDay, where) {
     const z = (iso, t) => iso.replace(/-/g, "") + (t ? "T" + t.replace(":", "") + "00" : "");
     const dates = allDay ? `${z(start)}/${z(E.addDays(start, 1))}` : `${z(start.date, start.time)}/${z(end.date, end.time)}`;
     const q = new URLSearchParams({ action: "TEMPLATE", text: title, details, dates, ctz: "Asia/Kolkata" });
+    if (where) q.set("location", where);
     return "https://calendar.google.com/calendar/render?" + q.toString();
   }
 
@@ -329,6 +371,7 @@
     line("Office attendance", 13, "bold");
     const m = r.comp.monthly;
     line(m.hasPolicy ? `Required ${m.required}  ·  Planned ${m.planned}  ·  Completed ${m.completed}  ·  Projected ${m.projected}  ·  ${st(m.status)}` : `No monthly minimum set. Planned ${m.planned}, completed ${m.completed}.`, 10);
+    { const a = actualSummary(state, ym, today); line(`Actual so far: ${a.wfo} office, ${a.wfhOffice} from home in ${CITY.BLR}, ${a.wfhHome} from home in ${CITY.HYD}${a.leave ? ", " + a.leave + " leave" : ""}${a.business ? ", " + a.business + " work trip" : ""}${a.unconfirmed ? ", " + a.unconfirmed + " not confirmed" : ""}.`, 9.5); }
     line("Completed counts only days you logged as office days. Planned days are never counted as completed.", 8.5, "italic", [86, 100, 92]);
     y += 4;
     row(["Week of", "Required", "Planned", "Completed", "Status"], [120, 80, 80, 90, 120], true);
@@ -351,7 +394,7 @@
       line(`${r.plan.label} plan, saved ${fDay(r.plan.createdAt.slice(0, 10))}`, 10);
       r.plan.explanation.forEach((t) => line("• " + t, 9.5));
       const blr = r.plan.days.filter((d) => d.location === "BLR").length;
-      line(`${blr} days in Bengaluru, ${r.plan.days.length - blr} in Hyderabad.`, 9.5);
+      line(`${blr} days in ${CITY.BLR}, ${r.plan.days.length - blr} in ${CITY.HYD}.`, 9.5);
     } else line("No plan saved for this month.", 10, "normal", [86, 100, 92]);
     if (r.versions.length > 1) {
       y += 4;
@@ -368,7 +411,7 @@
   }
 
   // ------------------------------------------------------------ screens: Today
-  function Today({ state, today, go, openJourney, setAttendance, openDay }) {
+  function Today({ state, today, go, openJourney, setAttendance, openDay, openConfirm }) {
     const ym = ymOf(today);
     const plan = acceptedPlan(state, ym);
     const pd = plan && plan.days.find((d) => d.date === today);
@@ -412,15 +455,14 @@
             <div><button class="btn primary small" onClick=${() => go("plan", ym)}>Make a plan</button></div>`}
       </div>
 
-      ${cls && cls.workday ? html`<div class="card">
-        <div class="row between"><h3>Log today</h3>${att ? html`<span class="small muted">Logged</span>` : html`<span class="small muted">Not logged yet</span>`}</div>
-        <${Seg} label="Today's attendance" value=${att || null} onChange=${(v) => setAttendance(today, v)}
-          options=${[["wfo", "Office"], ["wfh", "Home"], ["leave", "Leave"], ["business", "Work trip"]]} />
-      </div>` : null}
+      ${cls && cls.workday ? html`<div class="card"><${LogDay} state=${state} iso=${today} today=${today} setAttendance=${setAttendance} label="Log today" /></div>` : null}
 
-      ${unlogged.length ? html`<${Alert} tone="warn" title=${`${plural(unlogged.length, "planned office day")} not logged`}>
-        <p class="small">LifeSync only counts days you log. ${unlogged.slice(0, 4).map(fDay).join(", ")}${unlogged.length > 4 ? "…" : ""}</p>
-        <div><button class="btn small" onClick=${() => openDay(unlogged[0])}>Log ${fDay(unlogged[0])}</button></div></${Alert}>` : null}
+      ${unlogged.length ? html`<${Alert} tone="warn" title=${`${plural(unlogged.length, "planned office day")} to confirm`}>
+        <p class="small">Did you go to the office? Only confirmed office days count. ${unlogged.slice(0, 4).map(fDay).join(", ")}${unlogged.length > 4 ? "…" : ""}</p>
+        <div><button class="btn small" onClick=${() => openConfirm(unlogged)}>Confirm ${unlogged.length === 1 ? fDay(unlogged[0]) : plural(unlogged.length, "day")}</button></div></${Alert}>` : null}
+      ${plan && !stale.includes(ym) && !unlogged.length && comp.monthly.status === "at-risk" ? html`<${Alert} tone="warn" title=${`On track for ${comp.monthly.projected} of ${comp.monthly.required} office days`}>
+        <p class="small">You've worked from home on some planned office days. An updated plan can fit in the ${comp.monthly.required - comp.monthly.projected} you still need.</p>
+        <div><button class="btn small primary" onClick=${() => go("plan", ym, true)}>Review an updated plan</button></div></${Alert}>` : null}
 
       <div class="section">
         <div class="section-head"><h2>Next up</h2>${rem.length ? html`<span class="small muted">${plural(rem.length, "action")}</span>` : null}</div>
@@ -465,11 +507,41 @@
     </div>`;
   }
 
+  function LogDay({ state, iso, today, setAttendance, label }) {
+    const pd = planDay(state, iso);
+    const att = state.attendance[iso];
+    const atHome = pd && pd.location === "HYD";
+    const auto = !att && atHome && iso <= today;
+    const opts = atHome
+      ? [["wfh", "Home"], ["leave", "Leave"], ["business", "Work trip"], ["wfo", "Office"]]
+      : [["wfo", "Office"], ["wfh", "Home"], ["leave", "Leave"], ["business", "Work trip"]];
+    return html`<div class="stack" style="gap:8px">
+      <div class="row between"><h3>${label}</h3><span class="small muted">${att ? "Logged" : auto ? "Logged automatically" : pd && pd.mode === "wfo" ? "Planned: office" : "Not logged yet"}</span></div>
+      ${atHome ? html`<p class="small muted">You're in ${CITY.HYD}, so this counts as work from home. Change it only if the day went differently.</p>`
+        : pd && pd.location === "BLR" ? html`<p class="small muted">In ${CITY.BLR}: choose <b>Office</b> or <b>Home</b>. Only Office counts towards your office days.</p>` : null}
+      <${Seg} label="Attendance" value=${att || (auto ? "wfh" : null)} onChange=${(v) => setAttendance(iso, v)} options=${opts} />
+    </div>`;
+  }
+
+  function ConfirmSheet({ state, days, today, setAttendance, onClose }) {
+    return html`<${Sheet} title="Confirm past office days" onClose=${onClose}>
+      <p class="small muted">These were planned as office days. Tap what actually happened. Only <b>Office</b> counts as an office day.</p>
+      <div class="list">${days.map((iso) => {
+        const att = state.attendance[iso];
+        return html`<div class="item" style="cursor:default;flex-wrap:wrap"><div class="stack grow"><strong class="small">${fDay(iso)}</strong><span class="tiny muted">${att ? "Logged: " + ({ wfo: "office", wfh: "home", leave: "leave", business: "work trip" }[att]) : "Planned: office in " + CITY.BLR}</span></div>
+          <div class="seg confirm-seg" role="group" aria-label=${"Attendance " + fDay(iso)}>
+            ${[["wfo", "Office"], ["wfh", "Home"], ["leave", "Leave"]].map(([v, t]) => html`<button type="button" aria-pressed=${String(att === v)} onClick=${() => setAttendance(iso, att === v ? null : v, true)}>${t}</button>`)}
+          </div></div>`;
+      })}</div>
+      <button class="btn primary" onClick=${onClose}>Done</button>
+    </${Sheet}>`;
+  }
+
   function MonthMeter({ c, ym }) {
     if (!c.hasPolicy) return html`<div class="stack"><span class="small">No monthly minimum is set for ${fMonthShort(ym)}.</span><span class="tiny muted">${c.completed} logged, ${c.planned} planned.</span></div>`;
     const max = Math.max(c.required, c.planned, c.completed, 1) * 1.12;
     return html`<div class="meter">
-      <div class="row between"><span class="small"><strong class="num">${c.completed}</strong> of <span class="num">${c.required}</span> office days done in ${fMonthShort(ym)}</span><${Pill} map=${CSTATUS} k=${c.status} /></div>
+      <div class="row between"><span class="small"><strong class="num">${c.completed}</strong> of <span class="num">${c.required}</span> office days done in ${fMonthShort(ym)}${c.completed > c.required ? html`<span class="muted"> · ${c.completed - c.required} more than needed</span>` : null}</span><${Pill} map=${CSTATUS} k=${c.status} /></div>
       <div class="meter-bar" role="img" aria-label=${`${c.completed} completed, ${c.projected} projected, ${c.required} required`}>
         <div class="planned" style=${`width:${(c.projected / max) * 100}%`}></div>
         <div class="done" style=${`width:${(c.completed / max) * 100}%`}></div>
@@ -630,7 +702,7 @@
 
       ${!current && !result ? html`<div class="card">
         <h3>No plan for ${fMonthShort(ym)} yet</h3>
-        <p class="small muted">LifeSync works out where you should be each day so you meet your office rules with as few trips as possible, and lines up time with your daughter in Bengaluru and family at home. Nothing is booked or saved until you choose.</p>
+        <p class="small muted">LifeSync works out where you should be each day so you meet your office rules with as few trips as possible, and lines up time with your daughter in ${CITY.BLR} and family at home. Nothing is booked or saved until you choose.</p>
         <button class="btn primary block" onClick=${run}>Suggest plans</button>
       </div>` : null}
 
@@ -660,15 +732,15 @@
           <${TravelDates} journeys=${p.journeys} state=${state} today=${today} pins=${adj.pins} onEdit=${(j) => { setPick(i); setEditing(j); }} />
           ${pick === i ? html`<ul class="why">${p.explanation.map((t) => html`<li>${t}</li>`)}</ul>` : null}
         </div>`)}</div>
-        <div class="legend"><span><i class="sw" style="background:var(--blr)"></i>Bengaluru</span><span><i class="sw" style="background:var(--hyd);opacity:.6"></i>Hyderabad</span><span><i class="sw" style="background:var(--blr);position:relative"></i>with dot = office day</span></div>
+        <div class="legend"><span><i class="sw" style="background:var(--blr)"></i>${CITY.BLR}</span><span><i class="sw" style="background:var(--hyd);opacity:.6"></i>${CITY.HYD}</span><span><i class="sw" style="background:var(--blr);position:relative"></i>with dot = office day</span></div>
         <details class="card"><summary class="small" style="cursor:pointer;font-weight:650">Assumptions used</summary>
           <ul class="why small">
             <li>${req.monthly.policy ? `Monthly minimum ${req.monthly.policy.value}, adjusted to ${req.monthly.required} for this month.` : "No monthly minimum."}</li>
             <li>Holidays ${counting.holidaysReduceRequirement ? "reduce" : "do not reduce"} the requirement. Leave ${counting.leaveReducesRequirement ? "reduces" : "does not reduce"} it.</li>
             <li>Work trips ${counting.businessTravelCountsAsWFO ? "count" : "do not count"} as office days. Partial weeks at month edges are ${counting.partialWeeks === "prorate" ? "prorated" : counting.partialWeeks === "ignore" ? "ignored" : "counted in full"}.</li>
-            <li>Journeys are overnight: you leave in the evening and arrive the next morning. At least ${plural(state.prefs.minStayNights, "night")} per Bengaluru stay preferred.</li>
-            <li>${state.prefs.holidaysAtHome !== false ? "Weekday holidays are spent at home in Hyderabad, unless a ticket or must-attend event says otherwise." : "Weekday holidays can be spent in either city."}</li>
-            <li>Office-closed days ${counting.closedDaysReduceRequirement ? "reduce" : "do not reduce"} the requirement${state.prefs.closedDaysAtHome !== false ? " and are worked from home in Hyderabad" : ""}.</li>
+            <li>Journeys are overnight: you leave in the evening and arrive the next morning. At least ${plural(state.prefs.minStayNights, "night")} per ${CITY.BLR} stay preferred.</li>
+            <li>${state.prefs.holidaysAtHome !== false ? `Weekday holidays are spent at home in ${CITY.HYD}, unless a ticket or must-attend event says otherwise.` : "Weekday holidays can be spent in either city."}</li>
+            <li>Office-closed days ${counting.closedDaysReduceRequirement ? "reduce" : "do not reduce"} the requirement${state.prefs.closedDaysAtHome !== false ? ` and are worked from home in ${CITY.HYD}` : ""}.</li>
             <li>Booked, waitlisted and completed journeys, and trips you fixed, are kept exactly as they are. Past days and logged office days are kept.</li>
           </ul><button class="link" onClick=${() => go("more", "rules")}>Change rules or priorities</button></details>
         <div class="btn-row"><button class="btn primary" onClick=${() => setConfirm(true)}>Use ${chosen.label.toLowerCase()} plan</button><button class="btn" onClick=${() => { setResult(null); setAdj(EMPTY_ADJ); setHistory([]); }}>Cancel</button></div>
@@ -721,6 +793,7 @@
     const clsFor = (iso) => (ymOf(iso) === ym ? classified : E.classifyMonth(ymOf(iso), state)).find((d) => d.date === iso);
     const markOf = (b) => {
       if (b.att === "wfo") return html`<span class="mark done">DONE</span>`;
+      if (b.att === "wfh" && b.pd && b.pd.location === "BLR") return html`<span class="mark home">WFH</span>`;
       if (b.c.holiday) return html`<span class="mark hol">HOL</span>`;
       if (b.c.leave) return html`<span class="mark lv">LV</span>`;
       if (b.c.closed) return html`<span class="mark cls">WFH</span>`;
@@ -743,7 +816,7 @@
             const loc = b.pd ? b.pd.location : null;
             const desc = [fLong(c.date), loc ? CITY[loc] : "no plan", b.pd && b.pd.mode === "wfo" ? "office day" : "", b.att ? "logged " + b.att : "", c.holiday ? "holiday" : "", c.leave ? "leave" : "", b.fam.length ? "family available" : "", b.dep.length ? "journey" : ""].filter(Boolean).join(", ");
             return html`<button class=${"cell " + (loc || "") + (c.date === today ? " today" : "")} aria-label=${desc} onClick=${() => openDay(c.date)}>
-              <div class="top"><span class="d">${Number(c.date.slice(8))}</span>${b.dep.length ? html`<span class="trip" aria-hidden="true">${b.dep[0].to === "BLR" ? "→B" : "→H"}</span>` : null}</div>
+              <div class="top"><span class="d">${Number(c.date.slice(8))}</span>${b.dep.length ? html`<span class="trip" aria-hidden="true">${"→" + CODE[b.dep[0].to].slice(0, 1)}</span>` : null}</div>
               ${markOf(b)}
               <span class="code" aria-hidden="true">${loc || ""}</span>
               <span class="dots" aria-hidden="true">${b.fam.length ? html`<i class="dot fam"></i>` : null}${c.events.length ? html`<i class="dot"></i>` : null}</span>
@@ -751,9 +824,9 @@
           })}
         </div>
         <div class="legend">
-          <span><i class="sw" style="background:var(--blr-soft)"></i>BLR Bengaluru</span><span><i class="sw" style="background:var(--hyd-soft)"></i>HYD Hyderabad</span>
-          <span><b class="mono tiny">WFO</b> planned office</span><span><b class="mono tiny">DONE</b> logged office</span><span><b class="mono tiny">HOL</b> holiday</span><span><b class="mono tiny">LV</b> leave</span><span><b class="mono tiny">WFH</b> office closed</span>
-          <span><b class="mono tiny">→B</b> travel to Bengaluru tonight</span><span><i class="sw" style="background:#b0369a;border-radius:50%;width:9px;height:9px;border:0"></i>family available</span><span><i class="sw" style="background:var(--accent);border-radius:50%;width:9px;height:9px;border:0"></i>event</span>
+          <span><i class="sw" style="background:var(--blr-soft)"></i>${CODE.BLR} ${CITY.BLR}</span><span><i class="sw" style="background:var(--hyd-soft)"></i>${CODE.HYD} ${CITY.HYD}</span>
+          <span><b class="mono tiny">WFO</b> planned office</span><span><b class="mono tiny">DONE</b> logged office</span><span><b class="mono tiny">WFH</b> worked from home</span><span><b class="mono tiny">HOL</b> holiday</span><span><b class="mono tiny">LV</b> leave</span><span><b class="mono tiny">WFH</b> office closed</span>
+          <span><b class="mono tiny">→${CODE.BLR.slice(0, 1)}</b> travel to ${CITY.BLR} tonight</span><span><i class="sw" style="background:#b0369a;border-radius:50%;width:9px;height:9px;border:0"></i>family available</span><span><i class="sw" style="background:var(--accent);border-radius:50%;width:9px;height:9px;border:0"></i>event</span>
         </div>` : html`
         <div class="list agenda">${weekDays.map((iso) => {
           const c = clsFor(iso);
@@ -779,14 +852,12 @@
     return html`<${Sheet} title=${fLong(iso)} onClose=${onClose}>
       <div class="card">
         <div class="row between"><span class="eyebrow">Plan</span>${b.pd ? html`<${City} c=${b.pd.location} long />` : null}</div>
-        <p>${b.pd ? (b.pd.mode === "wfo" ? "Office day in Bengaluru" : b.pd.mode === "wfh" ? `Working from home in ${CITY[b.pd.location]}` : b.pd.mode === "closed" ? `Office closed · working from home in ${CITY[b.pd.location]}` : b.pd.mode === "holiday" ? "Holiday" : b.pd.mode === "leave" ? "Leave" : `Day off in ${CITY[b.pd.location]}`) : "No plan covers this day."}</p>
+        <p>${b.pd ? (b.pd.mode === "wfo" ? `Office day in ${CITY.BLR}` : b.pd.mode === "wfh" ? `Working from home in ${CITY[b.pd.location]}` : b.pd.mode === "closed" ? `Office closed · working from home in ${CITY[b.pd.location]}` : b.pd.mode === "holiday" ? "Holiday" : b.pd.mode === "leave" ? "Leave" : `Day off in ${CITY[b.pd.location]}`) : "No plan covers this day."}</p>
         ${c.mustOffice ? html`<span class="small muted">Required office day by your rules.</span>` : null}
         ${c.fixedWfh ? html`<span class="small muted">Fixed work-from-home day by your rules.</span>` : null}
         ${c.blackout ? html`<span class="small muted">No travel: ${c.blackout.label || "blackout date"}.</span>` : null}
       </div>
-      ${c.workday || b.att ? html`<div class="card"><h3>What actually happened</h3>
-        ${iso > today ? html`<p class="small muted">You can log this day once it arrives.</p>` : html`<${Seg} label="Attendance" value=${b.att || null} onChange=${(v) => setAttendance(iso, v)} options=${[["wfo", "Office"], ["wfh", "Home"], ["leave", "Leave"], ["business", "Work trip"]]} />`}
-      </div>` : null}
+      ${c.workday || b.att ? html`<div class="card">${iso > today ? html`<h3>What actually happened</h3><p class="small muted">You can log this day once it arrives.</p>` : html`<${LogDay} state=${state} iso=${iso} today=${today} setAttendance=${setAttendance} label="What actually happened" />`}</div>` : null}
       ${[...arr, ...b.dep].length ? html`<div class="list">${[...arr, ...b.dep].map((j) => html`<button class="item" onClick=${() => openJourney(j.id)}><div class="stack grow"><div class="row wrap"><${Route} j=${j} /><${Pill} map=${JSTATUS} k=${E.journeyState(j, today, state.prefs).status} /></div><span class="small">${j.date === iso ? "Departs" : "Arrives"} ${j.date === iso ? j.depTime || "" : j.arrTime || ""}</span></div></button>`)}</div>` : null}
       ${c.holiday || c.closed || c.leave || c.events.length || c.business ? html`<div class="list">
         ${[c.holiday, c.closed, c.leave, c.business, ...c.events].filter(Boolean).map((it) => html`<div class="item" style="cursor:default"><div class="stack grow"><strong class="small">${it.label || it.category}</strong><span class="tiny muted">${CATS[it.category]}${it.location ? " · " + CITY[it.location] : ""}${it.mustAttend ? " · must attend" : ""}</span></div></div>`)}
@@ -833,8 +904,8 @@
     const arrDate = j.arrTime && j.depTime && j.arrTime < j.depTime ? E.addDays(j.date, 1) : j.date;
     return html`<${Sheet} title=${isNew ? "Add journey" : journeyLabel(j)} onClose=${onClose}>
       <div class="grid2">
-        <${Field} label="From" id="j-from"><select id="j-from" value=${j.from} onChange=${(e) => setJ(Object.assign({}, j, { from: e.target.value, to: other(e.target.value) }))}><option value="HYD">Hyderabad</option><option value="BLR">Bengaluru</option></select></${Field}>
-        <${Field} label="To" id="j-to"><select id="j-to" value=${j.to} onChange=${(e) => setJ(Object.assign({}, j, { to: e.target.value, from: other(e.target.value) }))}><option value="BLR">Bengaluru</option><option value="HYD">Hyderabad</option></select></${Field}>
+        <${Field} label="From" id="j-from"><select id="j-from" value=${j.from} onChange=${(e) => setJ(Object.assign({}, j, { from: e.target.value, to: other(e.target.value) }))}><option value="HYD">${CITY.HYD}</option><option value="BLR">${CITY.BLR}</option></select></${Field}>
+        <${Field} label="To" id="j-to"><select id="j-to" value=${j.to} onChange=${(e) => setJ(Object.assign({}, j, { to: e.target.value, from: other(e.target.value) }))}><option value="BLR">${CITY.BLR}</option><option value="HYD">${CITY.HYD}</option></select></${Field}>
       </div>
       <div class="grid2">
         <${Field} label="Departure date" id="j-date"><input id="j-date" type="date" value=${j.date} onInput=${set("date")} /></${Field}>
@@ -875,7 +946,10 @@
       <div class="page-head"><span class="eyebrow">Compliance</span><h1>Office attendance</h1></div>
       <div class="month-nav"><button class="icon-btn" aria-label="Previous month" onClick=${() => setYm(addMonths(ym, -1))}>${I.left}</button><h2>${fMonth(ym)}</h2><button class="icon-btn" aria-label="Next month" onClick=${() => setYm(addMonths(ym, 1))}>${I.right}</button></div>
       <div class="card"><${MonthMeter} c=${c.monthly} ym=${ym} />
-        <div class="kv"><div><span class="v">${c.monthly.required}</span><span class="k">required</span></div><div><span class="v">${c.monthly.planned}</span><span class="k">planned</span></div><div><span class="v">${c.monthly.completed}</span><span class="k">completed</span></div></div>
+        <div class="kv"><div><span class="v">${c.monthly.required}</span><span class="k">required</span></div><div><span class="v">${c.monthly.planned}</span><span class="k">planned</span></div><div><span class="v">${c.monthly.completed}</span><span class="k">actual office</span></div></div>
+        ${(() => { const a = actualSummary(state, ym, today); return html`<div class="actuals small">
+          <span class="eyebrow">What actually happened so far</span>
+          <div class="row wrap" style="gap:6px 14px"><span><b class="num">${a.wfo}</b> office</span><span><b class="num">${a.wfhOffice}</b> from home in ${CITY.BLR}</span><span><b class="num">${a.wfhHome}</b> from home in ${CITY.HYD}</span>${a.leave ? html`<span><b class="num">${a.leave}</b> leave</span>` : null}${a.business ? html`<span><b class="num">${a.business}</b> work trip</span>` : null}${a.unconfirmed ? html`<span style="color:var(--warn)"><b class="num">${a.unconfirmed}</b> to confirm</span>` : null}</div></div>`; })()}
       </div>
       <div class="card"><h3>By week</h3><div class="scroll-x"><table class="t">
         <thead><tr><th>Week of</th><th class="n">Req.</th><th class="n">Plan</th><th class="n">Done</th><th>Status</th></tr></thead>
@@ -901,8 +975,8 @@
     return html`<div class="page">
       <button class="link back" onClick=${back}>${I.left}More</button>
       <div class="page-head head-row"><div class="stack" style="gap:4px"><span class="eyebrow">Family</span><h1>Availability</h1></div><button class="btn small primary" onClick=${() => edit({})}>${I.plus}Add</button></div>
-      <p class="small muted">Only dates and a status are stored, never event details. The planner favours being in Bengaluru when your daughter is free there, and at home in Hyderabad on weekends unless someone is away.</p>
-      ${upcoming.length ? html`<div class="list">${upcoming.map(Row)}</div>` : html`<div class="list"><div class="empty">No upcoming dates. Add when your daughter is free in Bengaluru.</div></div>`}
+      <p class="small muted">Only dates and a status are stored, never event details. The planner favours being in ${CITY.BLR} when your daughter is free there, and at home in ${CITY.HYD} on weekends unless someone is away.</p>
+      ${upcoming.length ? html`<div class="list">${upcoming.map(Row)}</div>` : html`<div class="list"><div class="empty">No upcoming dates. Add when your daughter is free in ${CITY.BLR}.</div></div>`}
       ${past.length ? html`<div class="section"><h3 class="muted">Past</h3><div class="list">${past.map(Row)}</div></div>` : null}
     </div>`;
   }
@@ -913,7 +987,7 @@
     return html`<${Sheet} title=${item.id ? "Edit availability" : "Add availability"} onClose=${onClose}>
       <div class="grid2">
         <${Field} label="Who" id="f-person"><input id="f-person" type="text" value=${f.person} onInput=${set("person")} /></${Field}>
-        <${Field} label="Where" id="f-loc"><select id="f-loc" value=${f.location} onChange=${set("location")}><option value="BLR">Bengaluru</option><option value="HYD">Hyderabad</option></select></${Field}>
+        <${Field} label="Where" id="f-loc"><select id="f-loc" value=${f.location} onChange=${set("location")}><option value="BLR">${CITY.BLR}</option><option value="HYD">${CITY.HYD}</option></select></${Field}>
       </div>
       <div class="grid2">
         <${Field} label="From" id="f-start"><input id="f-start" type="date" value=${f.start} onInput=${(e) => setF(Object.assign({}, f, { start: e.target.value, end: f.end < e.target.value ? e.target.value : f.end }))} /></${Field}>
@@ -941,6 +1015,25 @@
     if (p.type === "requiredDate") return p.date ? fDay(p.date) : "date not set";
     return (p.weekdays || []).map((d) => E.WEEKDAYS[d]).join(", ") || "no days selected";
   }
+  function PlacesCard({ p, setP }) {
+    const o = p.officeCity || {};
+    const h = p.homeCity || {};
+    const setO = (k) => (e) => setP("officeCity", Object.assign({}, o, { [k]: e.target.value }));
+    const setH = (k) => (e) => setP("homeCity", Object.assign({}, h, { [k]: e.target.value }));
+    return html`<div class="card"><h3>Your places</h3>
+      <p class="small muted">Renaming a place keeps all your plans, trips and logged days. They simply show the new name.</p>
+      <div class="places">
+        <div class="stack"><span class="eyebrow" style="color:var(--blr)">Office city</span>
+          <div class="grid2"><${Field} label="Name" id="pl-on"><input id="pl-on" type="text" placeholder="Bengaluru" value=${o.name || ""} onInput=${setO("name")} /></${Field}>
+          <${Field} label="Short code" id="pl-oc"><input id="pl-oc" type="text" maxlength="4" placeholder="BLR" value=${o.code || ""} onInput=${setO("code")} /></${Field}></div>
+          <${Field} label="Office address (optional)" id="pl-oa"><input id="pl-oa" type="text" value=${o.address || ""} onInput=${setO("address")} /></${Field}></div>
+        <div class="stack"><span class="eyebrow" style="color:var(--hyd)">Home city</span>
+          <div class="grid2"><${Field} label="Name" id="pl-hn"><input id="pl-hn" type="text" placeholder="Hyderabad" value=${h.name || ""} onInput=${setH("name")} /></${Field}>
+          <${Field} label="Short code" id="pl-hc"><input id="pl-hc" type="text" maxlength="4" placeholder="HYD" value=${h.code || ""} onInput=${setH("code")} /></${Field}></div>
+          <${Field} label="Home address (optional)" id="pl-ha"><input id="pl-ha" type="text" value=${h.address || ""} onInput=${setH("address")} /></${Field}></div>
+      </div></div>`;
+  }
+
   function RulesScreen({ state, update, back, editPolicy, toast, openHelp }) {
     const p = state.prefs;
     const c = Object.assign({}, E.DEFAULT_COUNTING, state.counting);
@@ -950,14 +1043,16 @@
     const setW = (k, v) => setP("weights", Object.assign({}, p.weights, { [k]: v }));
     const SLIDERS = [
       ["trips", "Avoid trips", 2, 40],
-      ["daughter", "Time with daughter in Bengaluru", 0, 20],
-      ["homeWeekend", "Weekends at home in Hyderabad", 0, 20],
+      ["daughter", `Time with daughter in ${CITY.BLR}"`, 0, 20],
+      ["homeWeekend", `Weekends at home in ${CITY.HYD}"`, 0, 20],
       ["homeWeekday", "Weekdays at home", 0, 10],
-      ["shortStay", "Avoid very short Bengaluru stays", 0, 20],
+      ["shortStay", `Avoid very short ${CITY.BLR} stays"`, 0, 20],
     ];
     return html`<div class="page">
       <button class="link back" onClick=${back}>${I.left}More</button>
       <div class="page-head"><span class="eyebrow">Rules & preferences</span><h1>Your rules</h1><${HelpLink} id="rules" openHelp=${openHelp} label="How rules and counting work" /></div>
+
+      <${PlacesCard} p=${p} setP=${setP} />
 
       <div class="section"><div class="section-head"><h2>Office rules</h2><button class="btn small" onClick=${() => editPolicy({})}>${I.plus}Add rule</button></div>
         ${(state.policies || []).length ? html`<div class="list">${state.policies.map((r) => html`<button class="item" onClick=${() => editPolicy(r)}><div class="stack grow">
@@ -978,14 +1073,14 @@
 
       <div class="card"><h3>Travel</h3>
         <div class="grid2">
-          <${Field} label="Start of month location" id="p-start" hint="Used when there's no plan for the previous month."><select id="p-start" value=${p.startLocation} onChange=${(e) => setP("startLocation", e.target.value)}><option value="HYD">Hyderabad</option><option value="BLR">Bengaluru</option></select></${Field}>
+          <${Field} label="Start of month location" id="p-start" hint="Used when there's no plan for the previous month."><select id="p-start" value=${p.startLocation} onChange=${(e) => setP("startLocation", e.target.value)}><option value="HYD">${CITY.HYD}</option><option value="BLR">${CITY.BLR}</option></select></${Field}>
           <${Field} label="Usual mode" id="p-mode"><select id="p-mode" value=${p.defaultMode} onChange=${(e) => setP("defaultMode", e.target.value)}><option value="train">Train</option><option value="bus">Bus</option><option value="flight">Flight</option><option value="car">Car</option></select></${Field}>
         </div>
-        <label class="check"><input type="checkbox" id="p-closedhome" checked=${p.closedDaysAtHome !== false} onChange=${(e) => setP("closedDaysAtHome", e.target.checked)} />Work from home in Hyderabad when the office is closed</label>
-        <label class="check"><input type="checkbox" id="p-holhome" checked=${p.holidaysAtHome !== false} onChange=${(e) => setP("holidaysAtHome", e.target.checked)} />Spend weekday holidays at home in Hyderabad</label>
+        <label class="check"><input type="checkbox" id="p-closedhome" checked=${p.closedDaysAtHome !== false} onChange=${(e) => setP("closedDaysAtHome", e.target.checked)} />Work from home in ${CITY.HYD} when the office is closed</label>
+        <label class="check"><input type="checkbox" id="p-holhome" checked=${p.holidaysAtHome !== false} onChange=${(e) => setP("holidaysAtHome", e.target.checked)} />Spend weekday holidays at home in ${CITY.HYD}</label>
         <div class="field"><span class="label">Preferred departure days</span><${DaysPick} name="p-days" value=${p.preferredTravelDays} onChange=${(v) => setP("preferredTravelDays", v)} /><span class="hint">Overnight journeys leave on the evening of these days.</span></div>
         <div class="grid2">
-          <${Field} label="Shortest Bengaluru stay (nights)" id="p-stay"><input id="p-stay" type="number" min="0" max="7" value=${p.minStayNights} onInput=${(e) => setP("minStayNights", Math.max(0, Math.min(7, Number(e.target.value) || 0)))} /></${Field}>
+          <${Field} label="Shortest ${CITY.BLR} stay (nights)" id="p-stay"><input id="p-stay" type="number" min="0" max="7" value=${p.minStayNights} onInput=${(e) => setP("minStayNights", Math.max(0, Math.min(7, Number(e.target.value) || 0)))} /></${Field}>
           <${Field} label="Typical one-way cost (₹)" id="p-cost"><input id="p-cost" type="number" value=${p.tripCost} onInput=${(e) => setP("tripCost", Number(e.target.value) || 0)} /></${Field}>
           <${Field} label="Book this many days ahead" id="p-lead"><input id="p-lead" type="number" value=${p.bookingLeadDays} onInput=${(e) => setP("bookingLeadDays", Number(e.target.value) || 0)} /></${Field}>
           <${Field} label="Booking opens (days before)" id="p-open" hint="Check your operator's current window."><input id="p-open" type="number" value=${p.bookingOpensDays} onInput=${(e) => setP("bookingOpensDays", Number(e.target.value) || 0)} /></${Field}>
@@ -1058,7 +1153,7 @@
       </div>
       ${bad ? html`<${Alert} tone="bad"><p class="small">The end date is before the start date.</p></${Alert}>` : null}
       ${i.category === "event" ? html`
-        <${Field} label="Where" id="i-loc"><select id="i-loc" value=${i.location} onChange=${set("location")}><option value="">Anywhere / not location-bound</option><option value="BLR">Bengaluru</option><option value="HYD">Hyderabad</option></select></${Field}>
+        <${Field} label="Where" id="i-loc"><select id="i-loc" value=${i.location} onChange=${set("location")}><option value="">Anywhere / not location-bound</option><option value="BLR">${CITY.BLR}</option><option value="HYD">${CITY.HYD}</option></select></${Field}>
         <label class="check"><input type="checkbox" id="i-must" checked=${!!i.mustAttend} onChange=${(e) => setI(Object.assign({}, i, { mustAttend: e.target.checked }))} />I must be there (the planner will never schedule around it)</label>` : null}
       <button class="btn primary" disabled=${!i.start || bad} onClick=${() => onSave(Object.assign({}, i, { id: i.id || uid(), end: i.end || "", example: false }))}>Save</button>
       ${item.id ? html`<${ConfirmButton} label="Delete" onConfirm=${() => onDelete(i.id)} />` : null}
@@ -1171,6 +1266,7 @@
       const el = bodyRef.current.querySelector("#help-" + section);
       if (el) setTimeout(() => el.scrollIntoView({ block: "start" }), 30);
     }, [section]);
+    const places = (t) => t.replace(/Bengaluru/g, CITY.BLR).replace(/Hyderabad/g, CITY.HYD);
     const strip = (h) => h.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").toLowerCase();
     const term = q.trim().toLowerCase();
     const list = H.sections.filter((x) => !term || x.title.toLowerCase().includes(term) || strip(x.body).includes(term));
@@ -1185,12 +1281,12 @@
         <div class="help-list">
           ${list.map((x) => html`<details id=${"help-" + x.id} class="help-sec" open=${!!term || open === x.id} onToggle=${(e) => e.target.open && setOpen(x.id)}>
             <summary><span>${x.title}</span></summary>
-            <div class="help-text" dangerouslySetInnerHTML=${{ __html: x.body }}></div>
+            <div class="help-text" dangerouslySetInnerHTML=${{ __html: places(x.body) }}></div>
           </details>`)}
         </div>
         ${!term ? html`<div class="card"><h3>What's new</h3>
           ${H.whatsNew.map((w) => html`<div class="stack" style="gap:4px"><span class="eyebrow">Version ${w.version}</span>
-            <ul class="why small">${w.items.map((t) => html`<li dangerouslySetInnerHTML=${{ __html: t }}></li>`)}</ul></div>`)}
+            <ul class="why small">${w.items.map((t) => html`<li dangerouslySetInnerHTML=${{ __html: places(t) }}></li>`)}</ul></div>`)}
         </div>` : null}
         <p class="tiny muted">Guide updated ${H.updated ? fDay(H.updated) : ""}. LifeSync keeps your data on this device.</p>
       </div>
@@ -1222,10 +1318,14 @@
     const [fixed, setFixed] = useState([]);
     const [name, setName] = useState("");
     const [start, setStart] = useState("HYD");
+    const [officeName, setOfficeName] = useState("Bengaluru");
+    const [homeName, setHomeName] = useState("Hyderabad");
     const finish = () => {
       const s = EMPTY();
       s.prefs.name = name.trim();
       s.prefs.startLocation = start;
+      if (officeName.trim() && officeName.trim() !== "Bengaluru") s.prefs.officeCity = { name: officeName.trim() };
+      if (homeName.trim() && homeName.trim() !== "Hyderabad") s.prefs.homeCity = { name: homeName.trim() };
       if (Number(m) > 0) s.policies.push({ id: uid(), type: "monthlyMin", value: Number(m), source: "Entered by you", active: true });
       if (Number(w) > 0) s.policies.push({ id: uid(), type: "weeklyMin", value: Number(w), source: "Entered by you", active: true });
       if (fixed.length) s.policies.push({ id: uid(), type: "fixedOffice", weekdays: fixed, source: "Entered by you", active: true });
@@ -1234,16 +1334,20 @@
     };
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">Welcome</span><h1>Set up LifeSync</h1>
-        <p class="small muted">Plan office days in Bengaluru, time at home in Hyderabad and time with your daughter, with fewer trips. Start with your office rule; everything can be changed later.</p>
+        <p class="small muted">Plan office days in ${CITY.BLR}, time at home in ${CITY.HYD} and time with your daughter, with fewer trips. Start with your office rule; everything can be changed later.</p>
         <${HelpLink} id="start" openHelp=${openHelp} label="Read the getting-started guide" /></div>
       <div class="card">
         <${Field} label="Your name (optional)" id="s-name"><input id="s-name" type="text" value=${name} onInput=${(e) => setName(e.target.value)} /></${Field}>
+        <div class="grid2">
+          <${Field} label="Office city" id="s-office"><input id="s-office" type="text" value=${officeName} onInput=${(e) => setOfficeName(e.target.value)} /></${Field}>
+          <${Field} label="Home city" id="s-home"><input id="s-home" type="text" value=${homeName} onInput=${(e) => setHomeName(e.target.value)} /></${Field}>
+        </div>
         <div class="grid2">
           <${Field} label="Office days per month" id="s-m" hint="0 if none"><input id="s-m" type="number" min="0" max="23" value=${m} onInput=${(e) => setM(e.target.value)} /></${Field}>
           <${Field} label="Office days per week" id="s-w" hint="0 if none"><input id="s-w" type="number" min="0" max="5" value=${w} onInput=${(e) => setW(e.target.value)} /></${Field}>
         </div>
         <div class="field"><span class="label">Fixed office weekdays (optional)</span><${DaysPick} name="s-fixed" value=${fixed} onChange=${setFixed} /></div>
-        <${Field} label="Where are you at the start of this month?" id="s-start"><select id="s-start" value=${start} onChange=${(e) => setStart(e.target.value)}><option value="HYD">Hyderabad</option><option value="BLR">Bengaluru</option></select></${Field}>
+        <${Field} label="Where are you at the start of this month?" id="s-start"><select id="s-start" value=${start} onChange=${(e) => setStart(e.target.value)}><option value="HYD">${CITY.HYD}</option><option value="BLR">${CITY.BLR}</option></select></${Field}>
         <button class="btn primary block" onClick=${finish}>Save and start</button>
       </div>
       <div class="card"><h3>Just looking?</h3><p class="small muted">Load a sample month with example rules, a holiday, your daughter's dates and a booked train, all clearly marked so you can remove them later.</p>
@@ -1313,12 +1417,12 @@
       update(key, next);
     };
     const remove = (key, id) => update(key, (state[key] || []).filter((x) => x.id !== id));
-    const setAttendance = (iso, v) => {
+    const setAttendance = (iso, v, quiet) => {
       const a = Object.assign({}, state.attendance);
       if (v) a[iso] = v;
       else delete a[iso];
       update("attendance", a);
-      toast(v ? `${fDay(iso)} logged as ${{ wfo: "office", wfh: "home", leave: "leave", business: "work trip" }[v]}` : "Log cleared");
+      if (!quiet) toast(v ? `${fDay(iso)} logged as ${{ wfo: "office", wfh: "home", leave: "leave", business: "work trip" }[v]}` : "Log cleared");
     };
     const acceptPlan = (plan, reason, adj) => {
       adj = adj || { pins: [], noTravel: [] };
@@ -1369,18 +1473,20 @@
       setTab("today");
     };
 
+    if (state) setPlaces(state.prefs);
     if (!state) return html`<div class="app"><div class="loading"><div class="spinner" aria-hidden="true"></div><span>Opening LifeSync…</span></div></div>`;
 
     const badge = E.reminders(state, today).filter((r) => r.priority === 1).length;
     const openJourney = (id) => setSheet({ type: "journey", item: state.journeys.find((j) => j.id === id) });
     const openDay = (iso) => setSheet({ type: "day", iso });
+    const openConfirm = (days) => setSheet({ type: "confirm", days });
     const addItem = (it) => setSheet({ type: "item", item: it });
     const back = () => setSub(null);
     const saveErr = saveStatus && saveStatus !== "saving" && saveStatus !== "saved";
 
     let body;
     if (!state.meta.setupDone) body = html`<${Setup} today=${today} onDone=${finishSetup} openHelp=${openHelp} />`;
-    else if (tab === "today") body = html`<${Today} state=${state} today=${today} go=${go} openJourney=${openJourney} setAttendance=${setAttendance} openDay=${openDay} />`;
+    else if (tab === "today") body = html`<${Today} state=${state} today=${today} go=${go} openJourney=${openJourney} setAttendance=${setAttendance} openDay=${openDay} openConfirm=${openConfirm} />`;
     else if (tab === "plan") body = html`<${PlanScreen} state=${state} today=${today} month=${planMonth} setMonth=${setPlanMonth} acceptPlan=${acceptPlan} go=${go} autoRun=${planAuto} clearAutoRun=${() => setPlanAuto(false)} openHelp=${openHelp} />`;
     else if (tab === "calendar") body = html`<${CalendarScreen} state=${state} today=${today} month=${calMonth} setMonth=${setCalMonth} openDay=${openDay} />`;
     else if (tab === "travel") body = html`<${TravelScreen} state=${state} today=${today} openJourney=${openJourney} newJourney=${() => setSheet({ type: "journey", item: null })} openHelp=${openHelp} />`;
@@ -1399,6 +1505,8 @@
         onSave=${(j) => { upsert("journeys", j); close(); toast("Journey saved"); }} onDelete=${(id) => { remove("journeys", id); close(); toast("Journey deleted"); }} />`;
     if (sheet && sheet.type === "day")
       sheetEl = html`<${DaySheet} state=${state} iso=${sheet.iso} today=${today} onClose=${close} setAttendance=${setAttendance} addItem=${addItem} openJourney=${openJourney} />`;
+    if (sheet && sheet.type === "confirm")
+      sheetEl = html`<${ConfirmSheet} state=${state} days=${sheet.days} today=${today} setAttendance=${setAttendance} onClose=${close} />`;
     if (sheet && sheet.type === "family")
       sheetEl = html`<${FamilySheet} item=${sheet.item} today=${today} onClose=${close} onSave=${(f) => { upsert("family", f); close(); toast("Availability saved"); }} onDelete=${(id) => { remove("family", id); close(); }} />`;
     if (sheet && sheet.type === "policy")

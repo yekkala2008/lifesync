@@ -13,10 +13,21 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.5.0",
+    version: "0.6.0",
     updated: "2026-10-09",
 
     whatsNew: [
+      {
+        version: "0.6.0",
+        items: [
+          "Work from home in Bengaluru is fully supported: on any day there, log <b>Office</b> or <b>Home</b>. Only Office counts.",
+          "Days in Hyderabad are logged as work from home automatically, so there's nothing to tap.",
+          "<b>Confirm</b> several past office days at once from Today.",
+          "If working from home leaves you short, Today offers an updated plan that fits in the missing office days.",
+          "Compliance and the PDF show what actually happened: office, home in each city, leave. Going over or under the target shows as it is.",
+          "Name your own office and home cities in <b>Rules &amp; preferences → Your places</b>. Your data is kept.",
+        ],
+      },
       {
         version: "0.5.0",
         items: [
@@ -56,12 +67,13 @@
         body: `
 <p>LifeSync works out where you should be each day, Bengaluru or Hyderabad, so you meet your office rules with as few trips as possible and still get time with your daughter and family at home.</p>
 <ol>
-<li>On the welcome screen, enter your office days per month and per week. Only use <b>fixed office weekdays</b> if your company requires specific days, such as every Wednesday.</li>
+<li>On the welcome screen, enter your office city and home city (Bengaluru and Hyderabad by default), then your office days per month and per week. Only use <b>fixed office weekdays</b> if your company requires specific days, such as every Wednesday.</li>
 <li>Add holidays, leave and office-closed days in <b>More → Holidays &amp; leave</b>.</li>
 <li>Add your daughter's dates in <b>More → Family</b>.</li>
 <li>Add tickets you have already booked in <b>Travel</b>, with status <b>Booked</b>.</li>
 <li>Go to <b>Plan → Suggest plans</b>, pick one, and tap <b>Save plan</b>.</li>
 </ol>
+<p>To rename your cities later, or add their short codes and addresses, use <b>More → Rules &amp; preferences → Your places</b>. Renaming keeps all your data.</p>
 <p class="tip">Want to look around first? On the welcome screen choose <b>Explore with example data</b>. Remove it later in <b>More → Backup &amp; data</b>.</p>`,
       },
       {
@@ -83,8 +95,11 @@
         title: "Today and logging your days",
         body: `
 <p><b>Today</b> shows where you should be, tonight's journey if any, booking actions, your office-day count and your daughter's upcoming dates.</p>
-<p>Use <b>Log today</b> every working day: <b>Office</b>, <b>Home</b>, <b>Leave</b> or <b>Work trip</b>. To log another day, tap it in <b>Calendar</b>.</p>
-<p class="tip">Only days you log as <b>Office</b> count as completed. A planned office day never counts until you log it.</p>`,
+<p><b>In Bengaluru</b> you can work from the office or from home. Each day, tap <b>Office</b> or <b>Home</b> in <b>Log today</b>. Planning 12 office days doesn't stop you working from home on others.</p>
+<p><b>In Hyderabad</b> the day is logged as <b>Home</b> automatically. Change it only for <b>Leave</b> or a <b>Work trip</b>.</p>
+<p>Planned office days you haven't confirmed appear on Today as <b>… to confirm</b>. Tap <b>Confirm</b> to mark several at once. To change any other day, tap it in <b>Calendar</b>.</p>
+<p>If you work from home on a planned office day and fall short, Today shows <b>On track for X of 12</b>. Tap <b>Review an updated plan</b> and LifeSync fits the missing days into the rest of the month.</p>
+<p class="tip">Only days logged as <b>Office</b> count. Your real total shows as it is, whether that's above or below the target. In Calendar, <b>DONE</b> means office and an outlined <b>WFH</b> means you worked from home in Bengaluru.</p>`,
       },
       {
         id: "rules",
@@ -180,7 +195,7 @@
         id: "compliance",
         title: "Office-day compliance",
         body: `
-<p><b>More → Compliance</b> shows, for each month and week: <b>required</b>, <b>planned</b> and <b>completed</b> office days, with a status.</p>
+<p><b>More → Compliance</b> shows, for each month and week: <b>required</b>, <b>planned</b> and <b>actual office</b> days, with a status. <b>What actually happened so far</b> breaks the month down into office, home in each city, leave and work trips.</p>
 <ul>
 <li><b>Met</b>: enough days logged.</li>
 <li><b>On track</b>: logged plus remaining planned days will meet it.</li>
@@ -211,6 +226,7 @@
 <p><b>Why does a trip show the day before a holiday?</b><br>Trips are overnight. Leaving the evening before puts you at home for the whole holiday.</p>
 <p><b>The plan keeps me in Bengaluru on a holiday.</b><br>A booked ticket or a must-attend event in Bengaluru overrides the holiday-at-home setting.</p>
 <p><b>It says no plan can meet my rules.</b><br>Read the listed reasons; usually two rules clash, or a fixed trip blocks the only possible days. Change one and try again.</p>
+<p><b>Will renaming my cities delete anything?</b><br>No. Plans, trips and logged days stay; they just show the new names. Daughter dates and events set in the office city stay with the office city.</p>
 <p><b>I can't find a setting.</b><br>Most settings are in <b>More → Rules &amp; preferences</b>; scroll down for <b>Travel</b> and <b>Planning priorities</b>.</p>`,
       },
     ],

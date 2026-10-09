@@ -8,7 +8,9 @@
  * Dates are ISO strings "YYYY-MM-DD" and all arithmetic is done in UTC so a
  * phone's time zone can never shift a day.
  *
- * Locations: "BLR" (Bengaluru, office city) and "HYD" (Hyderabad, home city).
+ * Locations: two fixed slots, "BLR" = your office city and "HYD" = your home city.
+ * The names shown come from prefs.officeCity / prefs.homeCity (defaults Bengaluru,
+ * Hyderabad); the slot keys never change, so saved data stays valid.
  */
 (function (root, factory) {
   const api = factory();
@@ -70,6 +72,14 @@
     partialWeeks: "prorate", // "prorate" | "full" | "ignore"
     weeklyBase: 5, // working days in a normal week, used to prorate
   };
+
+  function placeNames(state) {
+    const p = (state && state.prefs) || {};
+    return {
+      office: ((p.officeCity && p.officeCity.name) || "").trim() || "Bengaluru",
+      home: ((p.homeCity && p.homeCity.name) || "").trim() || "Hyderabad",
+    };
+  }
 
   function policyActive(p, iso) {
     if (p.active === false) return false;
@@ -232,7 +242,7 @@
       if (d.mustOffice && d.pinnedLocation === "HYD")
         issues.push({
           date: d.date,
-          text: `${d.date} is a required office day, but “${d.pinnedBy.label}” needs you in Hyderabad.`,
+          text: `${d.date} is a required office day, but “${d.pinnedBy.label}” needs you in ${placeNames(state).home}.`,
         });
     }
     (state.policies || [])
@@ -268,8 +278,8 @@
   const DEFAULT_WEIGHTS = {
     trips: 10, // cost of one one-way journey
     daughter: 6, // reward per evening/day in BLR overlapping daughter's availability
-    homeWeekend: 8, // reward per weekend day in Hyderabad
-    homeWeekday: 3, // reward per non-office weekday in Hyderabad
+    homeWeekend: 8, // reward per weekend day in the home city
+    homeWeekday: 3, // reward per non-office weekday in the home city
     shortStay: 6, // penalty per night short of the minimum stay
     midweekTravel: 2, // penalty for travelling on a weeknight other than the preferred ones
     extraOffice: 0.5, // tiny penalty per office day above requirement (keeps plans lean)
@@ -423,7 +433,7 @@
       if (forced.has(d.date)) return forced.get(d.date) === loc;
       // Weekday holidays at home, unless a ticket or a must-attend event says otherwise.
       if (prefs.holidaysAtHome && d.holiday && !isWeekend(d.date) && !d.pinnedLocation && loc !== "HYD") return false;
-      // Office-closed days: work from home in Hyderabad, with the same exceptions.
+      // Office-closed days: work from home in your home city, with the same exceptions.
       if (prefs.closedDaysAtHome && d.closed && !d.holiday && !isWeekend(d.date) && !d.pinnedLocation && loc !== "HYD") return false;
       return true;
     }
@@ -618,6 +628,7 @@
   }
 
   function explain(plan, state) {
+    const N = placeNames(state);
     const m = plan.metrics;
     const r = plan.requirements;
     const lines = [];
@@ -641,19 +652,19 @@
     }
     lines.push(`${m.trips} one-way ${m.trips === 1 ? "journey" : "journeys"}.`);
     if (m.daughterWindow)
-      lines.push(`In Bengaluru for ${m.daughterDays} of ${m.daughterWindow} days your daughter is available.`);
-    lines.push(`${m.hydWeekends} weekend ${m.hydWeekends === 1 ? "day" : "days"} at home in Hyderabad.`);
+      lines.push(`In ${N.office} for ${m.daughterDays} of ${m.daughterWindow} days your daughter is available.`);
+    lines.push(`${m.hydWeekends} weekend ${m.hydWeekends === 1 ? "day" : "days"} at home in ${N.home}.`);
     if (m.weekdayHolidays)
       lines.push(
         m.holidaysHome === m.weekdayHolidays
-          ? `${m.weekdayHolidays === 1 ? "The weekday holiday is" : `All ${m.weekdayHolidays} weekday holidays are`} spent at home in Hyderabad.`
-          : `${m.holidaysHome} of ${m.weekdayHolidays} weekday holidays at home; a ticket or event keeps you in Bengaluru for the rest.`
+          ? `${m.weekdayHolidays === 1 ? "The weekday holiday is" : `All ${m.weekdayHolidays} weekday holidays are`} spent at home in ${N.home}.`
+          : `${m.holidaysHome} of ${m.weekdayHolidays} weekday holidays at home; a ticket or event keeps you in ${N.office} for the rest.`
       );
     if (m.closedDays)
       lines.push(
         m.closedHome === m.closedDays
-          ? `Office closed on ${m.closedDays === 1 ? "1 day" : m.closedDays + " days"}: working from home in Hyderabad.`
-          : `Office closed on ${m.closedDays} days: ${m.closedHome} worked from Hyderabad; a ticket or event keeps you in Bengaluru for the rest.`
+          ? `Office closed on ${m.closedDays === 1 ? "1 day" : m.closedDays + " days"}: working from home in ${N.home}.`
+          : `Office closed on ${m.closedDays} days: ${m.closedHome} worked from ${N.home}; a ticket or event keeps you in ${N.office} for the rest.`
       );
     return lines;
   }
@@ -806,6 +817,6 @@
     // travel
     STATUSES, journeyState, reminders,
     // replanning
-    inputsFingerprint, diffPlans,
+    inputsFingerprint, diffPlans, placeNames,
   };
 });

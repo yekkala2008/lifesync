@@ -1,0 +1,218 @@
+/*
+ * LifeSync in-app help.
+ *
+ * RULE: every change to functionality updates this file in the same commit:
+ *   1. edit or add the relevant section(s) below,
+ *   2. add an entry to `whatsNew`,
+ *   3. set `version` to the new package.json version.
+ * The build refuses to run if `version` doesn't match package.json.
+ *
+ * Bodies are trusted HTML written here (no user input). Keep sentences short and
+ * name buttons exactly as they appear in the app, in bold.
+ */
+(function (root) {
+  "use strict";
+  root.LSHelp = {
+    version: "0.5.0",
+    updated: "2026-10-09",
+
+    whatsNew: [
+      {
+        version: "0.5.0",
+        items: [
+          "This Help guide: tap <b>?</b> at the top of any screen, or <b>More → Help</b>.",
+          "<b>How this works</b> links on Plan, Travel and Rules open the matching help section.",
+        ],
+      },
+      {
+        version: "0.4.0",
+        items: [
+          "New day type <b>Office closed (work from home)</b> for wellness days: no office, work from home in Hyderabad.",
+          "<b>Review an updated plan</b> on Today now opens the updated options directly.",
+        ],
+      },
+      {
+        version: "0.3.0",
+        items: [
+          "Tap a suggested trip to move it, keep it, or skip travel that evening. The month re-plans around your change.",
+          "Trips you set are marked <b>Your date</b> and stay fixed in later replans.",
+          "Trips read as overnight journeys: <i>evening → arrive next day</i>.",
+        ],
+      },
+      {
+        version: "0.2.0",
+        items: [
+          "Weekday holidays are spent at home in Hyderabad.",
+          "Each plan option lists its suggested travel dates with a book-by date.",
+          "Completed trips are kept as fixed facts when planning.",
+        ],
+      },
+    ],
+
+    sections: [
+      {
+        id: "start",
+        title: "Getting started",
+        body: `
+<p>LifeSync works out where you should be each day, Bengaluru or Hyderabad, so you meet your office rules with as few trips as possible and still get time with your daughter and family at home.</p>
+<ol>
+<li>On the welcome screen, enter your office days per month and per week. Only use <b>fixed office weekdays</b> if your company requires specific days, such as every Wednesday.</li>
+<li>Add holidays, leave and office-closed days in <b>More → Holidays &amp; leave</b>.</li>
+<li>Add your daughter's dates in <b>More → Family</b>.</li>
+<li>Add tickets you have already booked in <b>Travel</b>, with status <b>Booked</b>.</li>
+<li>Go to <b>Plan → Suggest plans</b>, pick one, and tap <b>Save plan</b>.</li>
+</ol>
+<p class="tip">Want to look around first? On the welcome screen choose <b>Explore with example data</b>. Remove it later in <b>More → Backup &amp; data</b>.</p>`,
+      },
+      {
+        id: "midmonth",
+        title: "Starting in the middle of a month",
+        body: `
+<p>Tell LifeSync what has already happened before you ask for a plan, otherwise it assumes you haven't been to the office yet.</p>
+<ol>
+<li><b>More → Rules &amp; preferences → Travel → Start of month location</b>: where you were on the 1st.</li>
+<li>Add this month's past holidays and leave too. They can reduce how many office days you need.</li>
+<li>In <b>Travel</b>, add trips you've already made this month with status <b>Completed</b>.</li>
+<li>In <b>Calendar</b>, tap each past day you were in the office and choose <b>Office</b>.</li>
+<li>Then <b>Plan → Suggest plans</b>. It plans only the days left.</li>
+</ol>
+<p class="tip">If a week has already gone by without enough office days, the plan says so and makes the most of the remaining days.</p>`,
+      },
+      {
+        id: "today",
+        title: "Today and logging your days",
+        body: `
+<p><b>Today</b> shows where you should be, tonight's journey if any, booking actions, your office-day count and your daughter's upcoming dates.</p>
+<p>Use <b>Log today</b> every working day: <b>Office</b>, <b>Home</b>, <b>Leave</b> or <b>Work trip</b>. To log another day, tap it in <b>Calendar</b>.</p>
+<p class="tip">Only days you log as <b>Office</b> count as completed. A planned office day never counts until you log it.</p>`,
+      },
+      {
+        id: "rules",
+        title: "Office rules and how days are counted",
+        body: `
+<p>Set these in <b>More → Rules &amp; preferences</b>.</p>
+<ul>
+<li><b>Monthly minimum</b> / <b>Weekly minimum</b>: office days you need.</li>
+<li><b>Fixed office weekdays</b>: days you must always be in the office. Every selected weekday becomes mandatory.</li>
+<li><b>Fixed work-from-home weekdays</b>: days the office is never planned.</li>
+<li><b>Required on-site date</b>: a single date you must be in the office.</li>
+<li>Rules can have start and end dates for policy changes.</li>
+</ul>
+<p><b>How days are counted</b> decides whether holidays, office-closed days and leave reduce the number you need, whether work trips count as office days, and how weeks split across two months are handled. Match these to your company's policy.</p>
+<p class="tip">Example: 12 a month, 21 working days, 2 holidays → 12 × 19 ÷ 21 = 10.9, rounded up to 11.</p>`,
+      },
+      {
+        id: "days",
+        title: "Holidays, office closed, leave and events",
+        body: `
+<p>Add these in <b>More → Holidays &amp; leave → Add</b>, or tap a day in <b>Calendar</b>.</p>
+<ul>
+<li><b>Holiday</b>: no work. Weekday holidays are spent at home in Hyderabad.</li>
+<li><b>Office closed (work from home)</b>: for wellness days and similar. You work, but from home in Hyderabad. Shown as a dashed <b>WFH</b> in Calendar.</li>
+<li><b>Leave</b>: your days off.</li>
+<li><b>Event</b>: anything with a place. Tick <b>I must be there</b> and choose the city to pin you there that day.</li>
+<li><b>Work trip</b>: travel for work; not an office day unless you choose otherwise in Rules.</li>
+<li><b>No-travel date</b>: no journey will leave on that evening.</li>
+</ul>
+<p class="tip">To stop holidays or office-closed days pulling you to Hyderabad, untick them in <b>Rules &amp; preferences → Travel</b>.</p>`,
+      },
+      {
+        id: "family",
+        title: "Family availability",
+        body: `
+<p>In <b>More → Family</b>, add when your daughter is free in Bengaluru, marked <b>Available</b> or <b>Tentative</b>. Plans favour being in Bengaluru on those dates, and each plan shows how many of them it covers, for example <i>3/4 daughter days covered</i>.</p>
+<p>You can also add someone in Hyderabad as <b>Unavailable / away</b>, and the planner won't count that weekend as home time.</p>
+<p class="tip">Only dates and a status are stored, never what anyone is doing.</p>`,
+      },
+      {
+        id: "plan",
+        title: "Making a plan",
+        body: `
+<p>In <b>Plan</b>, pick the month and tap <b>Suggest plans</b>. You get up to three options:</p>
+<ul>
+<li><b>Balanced</b>: the recommended mix.</li>
+<li><b>Fewest trips</b>: longer stays, fewer journeys.</li>
+<li><b>Most family time</b>: more weekends at home and more days with your daughter.</li>
+</ul>
+<p>Each option shows a strip of the month (green Bengaluru, ochre Hyderabad, dot = office day), the key numbers, its <b>Suggested travel</b> and a short explanation. Tap an option to select it, then <b>Use … plan</b>, check the summary and <b>Save plan</b>.</p>
+<p><b>Every trip is overnight.</b> <i>Tue 20 Oct · evening → arrive Wed 21</i> means you leave Tuesday evening and arrive Wednesday morning.</p>
+<p>Office rules always come first. If they can't all be met, the app lists which rules clash instead of guessing.</p>
+<p class="tip">To change how options are balanced, move the sliders in <b>Rules &amp; preferences → Planning priorities</b>.</p>`,
+      },
+      {
+        id: "adjust",
+        title: "Changing suggested travel dates",
+        body: `
+<ol>
+<li>In <b>Plan</b>, tap <b>Change travel dates</b> (or <b>Suggest plans</b>).</li>
+<li>Tap any trip in <b>Suggested travel</b>.</li>
+<li>Choose <b>Move trip</b> to another evening, <b>Keep</b> it as it is, or <b>Don't travel that evening</b>.</li>
+</ol>
+<p>The month re-plans immediately around your change: office days, the return trip and the weekly and monthly checks. Your edits are listed under <b>Your changes</b>, with <b>Undo</b> and <b>Clear all</b>.</p>
+<p>If a change would break a rule, such as clashing with a booked ticket, it's refused with the reason and your plan stays as it was.</p>
+<p>When you <b>Save plan</b>, trips you set are marked <b>Your date</b> and stay fixed in future replans. No-travel evenings are saved in <b>Holidays &amp; leave</b>.</p>
+<p class="tip">Changing a proposed trip's date in <b>Travel</b> also fixes it as <b>Your date</b>.</p>`,
+      },
+      {
+        id: "travel",
+        title: "Travel, bookings and reminders",
+        body: `
+<p>Saved plans add their trips to <b>Travel</b> as <b>Proposed</b>. When you book, open the trip and set:</p>
+<ul>
+<li><b>Booked and confirmed</b>, with times, train or operator, PNR and cost;</li>
+<li><b>Waitlisted / not confirmed</b>, which keeps a warning until confirmed;</li>
+<li><b>Travel completed</b> after the journey;</li>
+<li><b>Changed / cancelled</b> if plans change.</li>
+</ul>
+<p><b>Booking due</b> appears once a trip is within your booking lead time (<b>Rules → Travel → Book this many days ahead</b>).</p>
+<p><b>Phone reminders:</b> in a trip, tap <b>Booking reminder</b> or <b>Departure in calendar</b> to add it to Google Calendar. Your phone's calendar then alerts you even when LifeSync is closed.</p>
+<p class="tip">LifeSync never books, cancels or changes tickets, and doesn't check live seat availability.</p>`,
+      },
+      {
+        id: "changes",
+        title: "When something changes",
+        body: `
+<p>If you add a holiday, change a rule, add your daughter's dates, or book a trip that isn't in the plan, <b>Today</b> shows <b>Your plan may be out of date</b>.</p>
+<p>Tap <b>Review an updated plan</b> to see new options and a summary of what changes before anything is saved.</p>
+<p class="tip">Booking or completing a trip that the plan already suggested doesn't trigger this.</p>`,
+      },
+      {
+        id: "compliance",
+        title: "Office-day compliance",
+        body: `
+<p><b>More → Compliance</b> shows, for each month and week: <b>required</b>, <b>planned</b> and <b>completed</b> office days, with a status.</p>
+<ul>
+<li><b>Met</b>: enough days logged.</li>
+<li><b>On track</b>: logged plus remaining planned days will meet it.</li>
+<li><b>At risk</b>: the current plan falls short.</li>
+<li><b>Missed</b>: the period is over and it wasn't met.</li>
+</ul>`,
+      },
+      {
+        id: "reports",
+        title: "Monthly PDF report",
+        body: `
+<p><b>More → Reports</b>: choose a month and tap <b>Create PDF</b>. It covers office attendance by week, journeys and their status, plan changes and anything outstanding. On your phone you can share it to WhatsApp or email.</p>`,
+      },
+      {
+        id: "data",
+        title: "Backup, install and updates",
+        body: `
+<p>Your data is stored on this phone only. Save a copy regularly with <b>More → Backup &amp; data → Save backup</b>. Use <b>Restore from backup</b> on a new phone.</p>
+<p><b>Install:</b> open the app's address in Chrome → <b>⋮ → Install app</b> (iPhone: Safari → Share → <b>Add to Home Screen</b>).</p>
+<p><b>Updates:</b> close and reopen LifeSync while online to get the latest version. Your data isn't affected.</p>
+<p class="tip">Uninstalling the app or clearing Chrome's site data deletes your LifeSync data. Save a backup first.</p>`,
+      },
+      {
+        id: "faq",
+        title: "Common questions",
+        body: `
+<p><b>Why does it want more office days than I expected?</b><br>Past office days you haven't logged count as not attended. Log them in <b>Calendar</b>. Also check <b>Fixed office weekdays</b>: every day selected there is mandatory.</p>
+<p><b>Why does a trip show the day before a holiday?</b><br>Trips are overnight. Leaving the evening before puts you at home for the whole holiday.</p>
+<p><b>The plan keeps me in Bengaluru on a holiday.</b><br>A booked ticket or a must-attend event in Bengaluru overrides the holiday-at-home setting.</p>
+<p><b>It says no plan can meet my rules.</b><br>Read the listed reasons; usually two rules clash, or a fixed trip blocks the only possible days. Change one and try again.</p>
+<p><b>I can't find a setting.</b><br>Most settings are in <b>More → Rules &amp; preferences</b>; scroll down for <b>Travel</b> and <b>Planning priorities</b>.</p>`,
+      },
+    ],
+  };
+})(typeof self !== "undefined" ? self : this);

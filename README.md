@@ -21,7 +21,7 @@ LifeSync then opens full-screen from its icon and works offline.
 
 ## Updating the app
 
-Edit files in `src/`, bump `version` in `package.json` (this refreshes the offline cache), commit and push. The workflow redeploys; the installed app picks up the new version the next time it opens with a connection.
+Edit files in `src/`, **update the in-app help in `src/help.js`** (affected sections plus a `whatsNew` entry), bump `version` in both `package.json` and `src/help.js` (this also refreshes the offline cache), commit and push. The build fails if the help version doesn't match, so stale help can't be published. See `CLAUDE.md`. The workflow redeploys; the installed app picks up the new version the next time it opens with a connection.
 
 ## Run it on your computer
 
@@ -41,6 +41,7 @@ Works the same on Windows. No Docker needed, but `docker run --rm -p 8080:80 -v 
 | `src/engine.js` | All planning and compliance logic. Pure functions, no UI, unit-tested. |
 | `src/store.js` | Saving: browser storage on the phone, or your Claude account when opened as a Claude artifact. |
 | `src/app.js` | The screens (Preact + htm, no build step). |
+| `src/help.js` | The in-app Help guide (tap **?**). Updated with every functional change. |
 | `src/styles.css` | Colours, type and layout. Bengaluru is green, Hyderabad is ochre throughout. |
 | `test/engine.test.js` | Tests for rules, date boundaries, replanning and compliance (`node --test`). |
 | `build.mjs` | Produces both outputs. |
@@ -49,7 +50,7 @@ Works the same on Windows. No Docker needed, but `docker run --rm -p 8080:80 -v 
 
 The planner looks at every day of the month and decides where you are (Bengaluru or Hyderabad) and, on Bengaluru working days, whether you go to the office. Journeys are overnight, between two days.
 
-**Hard rules (never traded away):** monthly and weekly minimums, fixed office weekdays, required on-site dates, fixed WFH weekdays, holidays, leave and work trips, must-attend events, booked, waitlisted or completed journeys, and no-travel dates. Weekday holidays are spent at home in Hyderabad unless a ticket or must-attend event says otherwise (switch off in Rules → Travel). If these can't all be met, the app lists which ones conflict instead of guessing.
+**Hard rules (never traded away):** monthly and weekly minimums, fixed office weekdays, required on-site dates, fixed WFH weekdays, holidays, leave and work trips, must-attend events, booked, waitlisted or completed journeys, and no-travel dates. Weekday holidays are spent at home in Hyderabad, and office-closed days (Holidays & leave → type "Office closed (work from home)") are worked from home in Hyderabad, unless a ticket or must-attend event says otherwise (both switchable in Rules → Travel). If these can't all be met, the app lists which ones conflict instead of guessing.
 
 **Preferences (weighted, adjustable in Rules → Planning priorities):** fewer trips, time with your daughter when she's free in Bengaluru, weekends and weekdays at home, avoiding very short stays, travelling on preferred days.
 
@@ -62,6 +63,7 @@ Mid-month, days already past stay as they were. Only days you **log** as Office 
 These are settings, not assumptions baked into code (**More → Rules & preferences → How days are counted**):
 
 - Do public holidays reduce the number of office days you need? (default: yes, proportionally, rounded up)
+- Do office-closed days (e.g. wellness days, you still work from home) reduce it? (default: yes)
 - Does leave? (default: yes)
 - Do work trips count as office days? (default: no)
 - Weeks split across two months: prorate, full, or none? (default: prorate)

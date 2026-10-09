@@ -43,6 +43,7 @@
     departWindow: "20:00–23:00",
     maxJourneyHours: 12,
     holidaysAtHome: true,
+    closedDaysAtHome: true,
     weights: {},
   };
   const EMPTY = () => ({
@@ -125,6 +126,7 @@
     data: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6M5 12v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/></svg>`,
     items: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 14.5h3"/></svg>`,
   };
+  I.help = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01"/></svg>`;
   const BrandMark = () => html`<svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
     <path d="M7 19 C 7 9, 21 19, 21 9" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="2 2.4" stroke-linecap="round"/>
     <circle cx="7" cy="20" r="4.5" fill="var(--hyd)"/><circle cx="21" cy="8" r="4.5" fill="var(--blr)"/></svg>`;
@@ -396,13 +398,13 @@
 
       ${stale.map((m) => html`<${Alert} tone="warn" title=${`Your ${fMonthShort(m)} plan may be out of date`}>
         <p class="small">A rule, holiday, family date or booked journey changed after you saved it.</p>
-        <div><button class="btn small primary" onClick=${() => go("plan", m)}>Review an updated plan</button></div></${Alert}>`)}
+        <div><button class="btn small primary" onClick=${() => go("plan", m, true)}>Review an updated plan</button></div></${Alert}>`)}
 
       <div class=${"where " + (loc || "none")}>
         <span class="eyebrow">Today</span>
         ${loc
           ? html`<span class="big">${CITY[loc]}</span>
-            <span class="small">${pd.mode === "wfo" ? "Office day" : pd.mode === "wfh" ? "Working from home" : pd.mode === "holiday" ? "Holiday" + (cls && cls.holiday ? ": " + cls.holiday.label : "") : pd.mode === "leave" ? "On leave" : "Day off"}
+            <span class="small">${pd.mode === "wfo" ? "Office day" : pd.mode === "wfh" ? "Working from home" : pd.mode === "closed" ? "Office closed · working from home" + (cls && cls.closed && cls.closed.label ? ": " + cls.closed.label : "") : pd.mode === "holiday" ? "Holiday" + (cls && cls.holiday ? ": " + cls.holiday.label : "") : pd.mode === "leave" ? "On leave" : "Day off"}
               ${tonight ? html` · Travelling tonight to ${CITY[tonight.to]}${tonight.depTime ? " at " + tonight.depTime : ""}` : null}</span>
             <span class="stamp" aria-hidden="true">${loc}</span>`
           : html`<span class="big" style="font-size:22px">No plan for ${fMonthShort(ym)} yet</span>
@@ -543,7 +545,7 @@
     </${Sheet}>`;
   }
 
-  function PlanScreen({ state, today, month, setMonth, acceptPlan, go }) {
+  function PlanScreen({ state, today, month, setMonth, acceptPlan, go, autoRun, clearAutoRun, openHelp }) {
     const ym = month;
     const current = acceptedPlan(state, ym);
     const stale = current && current.fingerprint !== E.inputsFingerprint(ym, state, current);
@@ -555,7 +557,16 @@
     const [history, setHistory] = useState([]);
     const [editing, setEditing] = useState(null);
     const [rejected, setRejected] = useState(null);
-    useEffect(() => { setResult(null); setConfirm(false); setPick(0); setAdj(EMPTY_ADJ); setHistory([]); setRejected(null); }, [ym]);
+    useEffect(() => {
+      setConfirm(false); setPick(0); setAdj(EMPTY_ADJ); setHistory([]); setRejected(null);
+      setResult(autoRun ? compute(EMPTY_ADJ) : null);
+      if (autoRun) clearAutoRun();
+    }, [ym]);
+    useEffect(() => {
+      if (!autoRun) return;
+      setResult(compute(EMPTY_ADJ));
+      clearAutoRun();
+    }, [autoRun]);
     const months = [ymOf(today), addMonths(ymOf(today), 1), addMonths(ymOf(today), 2)];
     const compute = (a) => E.proposePlans(ym, state, { startLocation: startLocationFor(state, ym), fixedDays: fixedDaysFor(state, ym, today), today, pinTrips: a.pins, noTravel: a.noTravel });
     const run = () => {
@@ -605,7 +616,7 @@
     const selectCard = (i) => (e) => { if (e.type === "click" || e.key === "Enter" || e.key === " ") { e.preventDefault && e.type !== "click" && e.preventDefault(); setPick(i); } };
 
     return html`<div class="page">
-      <div class="page-head"><span class="eyebrow">Smart plan</span><h1>Plan ${fMonth(ym)}</h1></div>
+      <div class="page-head"><span class="eyebrow">Smart plan</span><h1>Plan ${fMonth(ym)}</h1><${HelpLink} id=${result && result.feasible ? "adjust" : "plan"} openHelp=${openHelp} label=${result && result.feasible ? "How to change travel dates" : "How planning works"} /></div>
       <${Seg} label="Month" value=${ym} onChange=${(v) => v && setMonth(v)} options=${months.map((m) => [m, fMonthShort(m)])} />
 
       ${current && !result ? html`<div class="card">
@@ -657,6 +668,7 @@
             <li>Work trips ${counting.businessTravelCountsAsWFO ? "count" : "do not count"} as office days. Partial weeks at month edges are ${counting.partialWeeks === "prorate" ? "prorated" : counting.partialWeeks === "ignore" ? "ignored" : "counted in full"}.</li>
             <li>Journeys are overnight: you leave in the evening and arrive the next morning. At least ${plural(state.prefs.minStayNights, "night")} per Bengaluru stay preferred.</li>
             <li>${state.prefs.holidaysAtHome !== false ? "Weekday holidays are spent at home in Hyderabad, unless a ticket or must-attend event says otherwise." : "Weekday holidays can be spent in either city."}</li>
+            <li>Office-closed days ${counting.closedDaysReduceRequirement ? "reduce" : "do not reduce"} the requirement${state.prefs.closedDaysAtHome !== false ? " and are worked from home in Hyderabad" : ""}.</li>
             <li>Booked, waitlisted and completed journeys, and trips you fixed, are kept exactly as they are. Past days and logged office days are kept.</li>
           </ul><button class="link" onClick=${() => go("more", "rules")}>Change rules or priorities</button></details>
         <div class="btn-row"><button class="btn primary" onClick=${() => setConfirm(true)}>Use ${chosen.label.toLowerCase()} plan</button><button class="btn" onClick=${() => { setResult(null); setAdj(EMPTY_ADJ); setHistory([]); }}>Cancel</button></div>
@@ -711,6 +723,7 @@
       if (b.att === "wfo") return html`<span class="mark done">DONE</span>`;
       if (b.c.holiday) return html`<span class="mark hol">HOL</span>`;
       if (b.c.leave) return html`<span class="mark lv">LV</span>`;
+      if (b.c.closed) return html`<span class="mark cls">WFH</span>`;
       if (b.pd && b.pd.mode === "wfo") return html`<span class="mark wfo">WFO</span>`;
       return null;
     };
@@ -739,7 +752,7 @@
         </div>
         <div class="legend">
           <span><i class="sw" style="background:var(--blr-soft)"></i>BLR Bengaluru</span><span><i class="sw" style="background:var(--hyd-soft)"></i>HYD Hyderabad</span>
-          <span><b class="mono tiny">WFO</b> planned office</span><span><b class="mono tiny">DONE</b> logged office</span><span><b class="mono tiny">HOL</b> holiday</span><span><b class="mono tiny">LV</b> leave</span>
+          <span><b class="mono tiny">WFO</b> planned office</span><span><b class="mono tiny">DONE</b> logged office</span><span><b class="mono tiny">HOL</b> holiday</span><span><b class="mono tiny">LV</b> leave</span><span><b class="mono tiny">WFH</b> office closed</span>
           <span><b class="mono tiny">→B</b> travel to Bengaluru tonight</span><span><i class="sw" style="background:#b0369a;border-radius:50%;width:9px;height:9px;border:0"></i>family available</span><span><i class="sw" style="background:var(--accent);border-radius:50%;width:9px;height:9px;border:0"></i>event</span>
         </div>` : html`
         <div class="list agenda">${weekDays.map((iso) => {
@@ -750,7 +763,7 @@
             <div class="stack grow">
               <div class="row wrap">${b.pd ? html`<${City} c=${b.pd.location} />` : html`<span class="small muted">No plan</span>`}
                 ${b.att === "wfo" ? html`<span class="pill ok"><span class="glyph">✓</span>Office logged</span>` : b.pd && b.pd.mode === "wfo" ? html`<span class="pill neutral">Office planned</span>` : null}
-                ${c.holiday ? html`<span class="pill info">Holiday</span>` : null}${c.leave ? html`<span class="pill warn">Leave</span>` : null}</div>
+                ${c.holiday ? html`<span class="pill info">Holiday</span>` : null}${c.closed ? html`<span class="pill neutral">Office closed · WFH</span>` : null}${c.leave ? html`<span class="pill warn">Leave</span>` : null}</div>
               ${c.events.map((e) => html`<span class="small">${e.label}${e.location ? " · " + CITY[e.location] : ""}</span>`)}
               ${b.fam.map((f) => html`<span class="small">${f.person} available in ${CITY[f.location || "BLR"]}${f.status === "tentative" ? " (tentative)" : ""}</span>`)}
               ${b.dep.map((j) => html`<span class="small">Journey ${journeyLabel(j)}${j.depTime ? " at " + j.depTime : ""}</span>`)}
@@ -766,7 +779,7 @@
     return html`<${Sheet} title=${fLong(iso)} onClose=${onClose}>
       <div class="card">
         <div class="row between"><span class="eyebrow">Plan</span>${b.pd ? html`<${City} c=${b.pd.location} long />` : null}</div>
-        <p>${b.pd ? (b.pd.mode === "wfo" ? "Office day in Bengaluru" : b.pd.mode === "wfh" ? `Working from home in ${CITY[b.pd.location]}` : b.pd.mode === "holiday" ? "Holiday" : b.pd.mode === "leave" ? "Leave" : `Day off in ${CITY[b.pd.location]}`) : "No plan covers this day."}</p>
+        <p>${b.pd ? (b.pd.mode === "wfo" ? "Office day in Bengaluru" : b.pd.mode === "wfh" ? `Working from home in ${CITY[b.pd.location]}` : b.pd.mode === "closed" ? `Office closed · working from home in ${CITY[b.pd.location]}` : b.pd.mode === "holiday" ? "Holiday" : b.pd.mode === "leave" ? "Leave" : `Day off in ${CITY[b.pd.location]}`) : "No plan covers this day."}</p>
         ${c.mustOffice ? html`<span class="small muted">Required office day by your rules.</span>` : null}
         ${c.fixedWfh ? html`<span class="small muted">Fixed work-from-home day by your rules.</span>` : null}
         ${c.blackout ? html`<span class="small muted">No travel: ${c.blackout.label || "blackout date"}.</span>` : null}
@@ -775,8 +788,8 @@
         ${iso > today ? html`<p class="small muted">You can log this day once it arrives.</p>` : html`<${Seg} label="Attendance" value=${b.att || null} onChange=${(v) => setAttendance(iso, v)} options=${[["wfo", "Office"], ["wfh", "Home"], ["leave", "Leave"], ["business", "Work trip"]]} />`}
       </div>` : null}
       ${[...arr, ...b.dep].length ? html`<div class="list">${[...arr, ...b.dep].map((j) => html`<button class="item" onClick=${() => openJourney(j.id)}><div class="stack grow"><div class="row wrap"><${Route} j=${j} /><${Pill} map=${JSTATUS} k=${E.journeyState(j, today, state.prefs).status} /></div><span class="small">${j.date === iso ? "Departs" : "Arrives"} ${j.date === iso ? j.depTime || "" : j.arrTime || ""}</span></div></button>`)}</div>` : null}
-      ${c.holiday || c.leave || c.events.length || c.business ? html`<div class="list">
-        ${[c.holiday, c.leave, c.business, ...c.events].filter(Boolean).map((it) => html`<div class="item" style="cursor:default"><div class="stack grow"><strong class="small">${it.label || it.category}</strong><span class="tiny muted">${CATS[it.category]}${it.location ? " · " + CITY[it.location] : ""}${it.mustAttend ? " · must attend" : ""}</span></div></div>`)}
+      ${c.holiday || c.closed || c.leave || c.events.length || c.business ? html`<div class="list">
+        ${[c.holiday, c.closed, c.leave, c.business, ...c.events].filter(Boolean).map((it) => html`<div class="item" style="cursor:default"><div class="stack grow"><strong class="small">${it.label || it.category}</strong><span class="tiny muted">${CATS[it.category]}${it.location ? " · " + CITY[it.location] : ""}${it.mustAttend ? " · must attend" : ""}</span></div></div>`)}
       </div>` : null}
       ${b.fam.length ? html`<div class="list">${b.fam.map((f) => html`<div class="item" style="cursor:default"><div class="stack grow"><strong class="small">${f.person} available</strong><span class="tiny muted">${CITY[f.location || "BLR"]} · ${f.status} · source: ${f.source || "Manual"}</span></div></div>`)}</div>` : null}
       <div class="btn-row">
@@ -788,7 +801,7 @@
   }
 
   // ------------------------------------------------------------ screens: Travel
-  function TravelScreen({ state, today, openJourney, newJourney }) {
+  function TravelScreen({ state, today, openJourney, newJourney, openHelp }) {
     const [tab, setTab] = useState("upcoming");
     const js = (state.journeys || []).slice().sort((a, b) => a.date.localeCompare(b.date));
     const upcoming = js.filter((j) => j.date >= E.addDays(today, -1) && !["completed", "cancelled"].includes(j.status));
@@ -806,6 +819,7 @@
             <span class="small">${[j.depTime ? "Departs " + j.depTime : "Evening", arriveLabel(j), j.mode, j.operator].filter(Boolean).join(" · ")}</span>
             ${s.action ? html`<span class="tiny" style="color:var(--warn)">${s.action}</span>` : null}</div></button>`;
       })}</div>` : html`<div class="list"><div class="empty">${tab === "upcoming" ? "No upcoming journeys. Save a plan to get proposed journeys, or add one you've booked." : "Nothing here yet."}</div></div>`}
+      <${HelpLink} id="travel" openHelp=${openHelp} label="How bookings and reminders work" />
       <p class="tiny muted">LifeSync doesn't check live seat availability. Record what you booked, and it reminds you about booking dates, waitlists and departures.</p>
     </div>`;
   }
@@ -869,7 +883,7 @@
       </table></div></div>
       <div class="card"><h3>How this is counted</h3><ul class="why small">
         <li>Completed means days you logged as Office. A planned day never counts as completed.</li>
-        <li>Holidays ${c.counting.holidaysReduceRequirement ? "reduce" : "don't reduce"} the requirement; leave ${c.counting.leaveReducesRequirement ? "reduces" : "doesn't reduce"} it. Work trips ${c.counting.businessTravelCountsAsWFO ? "count" : "don't count"} as office days.</li>
+        <li>Holidays ${c.counting.holidaysReduceRequirement ? "reduce" : "don't reduce"} the requirement; office-closed days ${c.counting.closedDaysReduceRequirement ? "reduce" : "don't reduce"} it; leave ${c.counting.leaveReducesRequirement ? "reduces" : "doesn't reduce"} it. Work trips ${c.counting.businessTravelCountsAsWFO ? "count" : "don't count"} as office days.</li>
         <li>Weeks run Monday to Sunday. Partial weeks at the month's edges are ${c.counting.partialWeeks === "prorate" ? "prorated" : c.counting.partialWeeks === "ignore" ? "ignored" : "counted in full"}.</li>
         <li>These are assumptions until you confirm your company's policy in Rules.</li></ul></div>
     </div>`;
@@ -921,13 +935,13 @@
     fixedWfh: "Fixed work-from-home weekdays",
     requiredDate: "Required on-site date",
   };
-  const CATS = { holiday: "Holiday", leave: "Leave", event: "Event", "business-travel": "Work trip", blackout: "No-travel date" };
+  const CATS = { holiday: "Holiday", "office-closed": "Office closed (work from home)", leave: "Leave", event: "Event", "business-travel": "Work trip", blackout: "No-travel date" };
   function policyText(p) {
     if (p.type === "monthlyMin" || p.type === "weeklyMin") return `${p.value} days`;
     if (p.type === "requiredDate") return p.date ? fDay(p.date) : "date not set";
     return (p.weekdays || []).map((d) => E.WEEKDAYS[d]).join(", ") || "no days selected";
   }
-  function RulesScreen({ state, update, back, editPolicy, toast }) {
+  function RulesScreen({ state, update, back, editPolicy, toast, openHelp }) {
     const p = state.prefs;
     const c = Object.assign({}, E.DEFAULT_COUNTING, state.counting);
     const w = Object.assign({}, E.DEFAULT_WEIGHTS, p.weights || {});
@@ -943,7 +957,7 @@
     ];
     return html`<div class="page">
       <button class="link back" onClick=${back}>${I.left}More</button>
-      <div class="page-head"><span class="eyebrow">Rules & preferences</span><h1>Your rules</h1></div>
+      <div class="page-head"><span class="eyebrow">Rules & preferences</span><h1>Your rules</h1><${HelpLink} id="rules" openHelp=${openHelp} label="How rules and counting work" /></div>
 
       <div class="section"><div class="section-head"><h2>Office rules</h2><button class="btn small" onClick=${() => editPolicy({})}>${I.plus}Add rule</button></div>
         ${(state.policies || []).length ? html`<div class="list">${state.policies.map((r) => html`<button class="item" onClick=${() => editPolicy(r)}><div class="stack grow">
@@ -956,6 +970,7 @@
       <div class="card"><h3>How days are counted</h3>
         <p class="small muted">Confirm these against your company's policy. They change how many office days you need.</p>
         <label class="check"><input type="checkbox" id="c-hol" checked=${c.holidaysReduceRequirement} onChange=${(e) => setC("holidaysReduceRequirement", e.target.checked)} />Public holidays reduce the number of office days I need</label>
+        <label class="check"><input type="checkbox" id="c-closed" checked=${c.closedDaysReduceRequirement} onChange=${(e) => setC("closedDaysReduceRequirement", e.target.checked)} />Office-closed days (e.g. wellness days) reduce the number of office days I need</label>
         <label class="check"><input type="checkbox" id="c-leave" checked=${c.leaveReducesRequirement} onChange=${(e) => setC("leaveReducesRequirement", e.target.checked)} />Leave reduces the number of office days I need</label>
         <label class="check"><input type="checkbox" id="c-biz" checked=${c.businessTravelCountsAsWFO} onChange=${(e) => setC("businessTravelCountsAsWFO", e.target.checked)} />Work trips count as office days</label>
         <${Field} label="Weeks split across two months" id="c-partial"><select id="c-partial" value=${c.partialWeeks} onChange=${(e) => setC("partialWeeks", e.target.value)}><option value="prorate">Prorate the weekly minimum</option><option value="full">Apply the full weekly minimum</option><option value="ignore">Don't apply a weekly minimum</option></select></${Field}>
@@ -966,6 +981,7 @@
           <${Field} label="Start of month location" id="p-start" hint="Used when there's no plan for the previous month."><select id="p-start" value=${p.startLocation} onChange=${(e) => setP("startLocation", e.target.value)}><option value="HYD">Hyderabad</option><option value="BLR">Bengaluru</option></select></${Field}>
           <${Field} label="Usual mode" id="p-mode"><select id="p-mode" value=${p.defaultMode} onChange=${(e) => setP("defaultMode", e.target.value)}><option value="train">Train</option><option value="bus">Bus</option><option value="flight">Flight</option><option value="car">Car</option></select></${Field}>
         </div>
+        <label class="check"><input type="checkbox" id="p-closedhome" checked=${p.closedDaysAtHome !== false} onChange=${(e) => setP("closedDaysAtHome", e.target.checked)} />Work from home in Hyderabad when the office is closed</label>
         <label class="check"><input type="checkbox" id="p-holhome" checked=${p.holidaysAtHome !== false} onChange=${(e) => setP("holidaysAtHome", e.target.checked)} />Spend weekday holidays at home in Hyderabad</label>
         <div class="field"><span class="label">Preferred departure days</span><${DaysPick} name="p-days" value=${p.preferredTravelDays} onChange=${(v) => setP("preferredTravelDays", v)} /><span class="hint">Overnight journeys leave on the evening of these days.</span></div>
         <div class="grid2">
@@ -1012,7 +1028,7 @@
   }
 
   // ------------------------------------------------------------ More: holidays, leave, events
-  function ItemsScreen({ state, today, back, edit }) {
+  function ItemsScreen({ state, today, back, edit, openHelp }) {
     const [cat, setCat] = useState("all");
     const list = (state.calendar || []).filter((i) => cat === "all" || i.category === cat).slice().sort((a, b) => a.start.localeCompare(b.start));
     const up = list.filter((i) => (i.end || i.start) >= today);
@@ -1023,6 +1039,7 @@
     return html`<div class="page">
       <button class="link back" onClick=${back}>${I.left}More</button>
       <div class="page-head head-row"><div class="stack" style="gap:4px"><span class="eyebrow">Calendar items</span><h1>Holidays, leave & events</h1></div><button class="btn small primary" onClick=${() => edit({ category: cat === "all" ? "holiday" : cat })}>${I.plus}Add</button></div>
+      <${HelpLink} id="days" openHelp=${openHelp} label="Which type should I use?" />
       <select aria-label="Filter" value=${cat} onChange=${(e) => setCat(e.target.value)}><option value="all">All items</option>${Object.entries(CATS).map(([k, v]) => html`<option value=${k}>${v}</option>`)}</select>
       ${up.length ? html`<div class="list">${up.map(Row)}</div>` : html`<div class="list"><div class="empty">Nothing upcoming. Add your company's holiday list, planned leave and family events.</div></div>`}
       ${past.length ? html`<div class="section"><h3 class="muted">Past</h3><div class="list">${past.map(Row)}</div></div>` : null}
@@ -1034,7 +1051,7 @@
     const bad = i.end && i.end < i.start;
     return html`<${Sheet} title=${item.id ? "Edit item" : "Add " + CATS[i.category].toLowerCase()} onClose=${onClose}>
       <${Field} label="Type" id="i-cat"><select id="i-cat" value=${i.category} onChange=${set("category")}>${Object.entries(CATS).map(([k, v]) => html`<option value=${k}>${v}</option>`)}</select></${Field}>
-      <${Field} label="Label" id="i-label"><input id="i-label" type="text" value=${i.label} onInput=${set("label")} placeholder=${{ holiday: "e.g. Deepavali", leave: "e.g. Annual leave", event: "e.g. Cousin's wedding", "business-travel": "e.g. Client visit, Pune", blackout: "e.g. Exam week" }[i.category]} /></${Field}>
+      <${Field} label="Label" id="i-label"><input id="i-label" type="text" value=${i.label} onInput=${set("label")} placeholder=${{ holiday: "e.g. Deepavali", "office-closed": "e.g. Wellness day", leave: "e.g. Annual leave", event: "e.g. Cousin's wedding", "business-travel": "e.g. Client visit, Pune", blackout: "e.g. Exam week" }[i.category]} /></${Field}>
       <div class="grid2">
         <${Field} label="From" id="i-start"><input id="i-start" type="date" value=${i.start} onInput=${set("start")} /></${Field}>
         <${Field} label="To" id="i-end" hint="Leave blank for one day"><input id="i-end" type="date" value=${i.end || ""} onInput=${set("end")} /></${Field}>
@@ -1137,6 +1154,50 @@
     </div>`;
   }
 
+  // ------------------------------------------------------------ Help window
+  function HelpWindow({ section, onClose }) {
+    const H = window.LSHelp || { sections: [], whatsNew: [] };
+    const [q, setQ] = useState("");
+    const [open, setOpen] = useState(section || null);
+    const bodyRef = useRef(null);
+    useEffect(() => {
+      const k = (e) => e.key === "Escape" && onClose();
+      addEventListener("keydown", k);
+      document.body.style.overflow = "hidden";
+      return () => { removeEventListener("keydown", k); document.body.style.overflow = ""; };
+    }, []);
+    useEffect(() => {
+      if (!section || !bodyRef.current) return;
+      const el = bodyRef.current.querySelector("#help-" + section);
+      if (el) setTimeout(() => el.scrollIntoView({ block: "start" }), 30);
+    }, [section]);
+    const strip = (h) => h.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").toLowerCase();
+    const term = q.trim().toLowerCase();
+    const list = H.sections.filter((x) => !term || x.title.toLowerCase().includes(term) || strip(x.body).includes(term));
+    return html`<div class="help-window" role="dialog" aria-modal="true" aria-label="LifeSync help">
+      <div class="help-head">
+        <div class="stack" style="gap:2px"><span class="eyebrow">Help · version ${H.version}</span><h2>How to use LifeSync</h2></div>
+        <button class="icon-btn" aria-label="Close help" onClick=${onClose}>${I.close}</button>
+      </div>
+      <div class="help-body" ref=${bodyRef}>
+        <input type="text" id="help-search" placeholder="Search help, e.g. holiday, PNR, backup" value=${q} onInput=${(e) => setQ(e.target.value)} aria-label="Search help" />
+        ${list.length ? null : html`<div class="empty">Nothing matches “${q}”. Try another word.</div>`}
+        <div class="help-list">
+          ${list.map((x) => html`<details id=${"help-" + x.id} class="help-sec" open=${!!term || open === x.id} onToggle=${(e) => e.target.open && setOpen(x.id)}>
+            <summary><span>${x.title}</span></summary>
+            <div class="help-text" dangerouslySetInnerHTML=${{ __html: x.body }}></div>
+          </details>`)}
+        </div>
+        ${!term ? html`<div class="card"><h3>What's new</h3>
+          ${H.whatsNew.map((w) => html`<div class="stack" style="gap:4px"><span class="eyebrow">Version ${w.version}</span>
+            <ul class="why small">${w.items.map((t) => html`<li dangerouslySetInnerHTML=${{ __html: t }}></li>`)}</ul></div>`)}
+        </div>` : null}
+        <p class="tiny muted">Guide updated ${H.updated ? fDay(H.updated) : ""}. LifeSync keeps your data on this device.</p>
+      </div>
+    </div>`;
+  }
+  const HelpLink = ({ id, openHelp, label }) => html`<button class="link help-link" onClick=${() => openHelp(id)}>${I.help}${label || "How this works"}</button>`;
+
   function MoreScreen({ go, state, today }) {
     const comp = E.compliance(ymOf(today), state, acceptedPlan(state, ymOf(today)), today);
     const tiles = [
@@ -1146,6 +1207,7 @@
       ["items", I.items, "Holidays & leave", `${(state.calendar || []).filter((i) => (i.end || i.start) >= today).length} upcoming`],
       ["reports", I.report, "Reports", "PDF for any month"],
       ["data", I.data, "Backup & data", "Save, restore, reset"],
+      ["help", I.help, "Help", "How to use LifeSync"],
     ];
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">More</span><h1>Settings & tools</h1></div>
@@ -1154,7 +1216,7 @@
   }
 
   // ------------------------------------------------------------ first run
-  function Setup({ today, onDone }) {
+  function Setup({ today, onDone, openHelp }) {
     const [m, setM] = useState(12);
     const [w, setW] = useState(2);
     const [fixed, setFixed] = useState([]);
@@ -1172,7 +1234,8 @@
     };
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">Welcome</span><h1>Set up LifeSync</h1>
-        <p class="small muted">Plan office days in Bengaluru, time at home in Hyderabad and time with your daughter, with fewer trips. Start with your office rule; everything can be changed later.</p></div>
+        <p class="small muted">Plan office days in Bengaluru, time at home in Hyderabad and time with your daughter, with fewer trips. Start with your office rule; everything can be changed later.</p>
+        <${HelpLink} id="start" openHelp=${openHelp} label="Read the getting-started guide" /></div>
       <div class="card">
         <${Field} label="Your name (optional)" id="s-name"><input id="s-name" type="text" value=${name} onInput=${(e) => setName(e.target.value)} /></${Field}>
         <div class="grid2">
@@ -1196,8 +1259,11 @@
     const [tab, setTab] = useState("today");
     const [sub, setSub] = useState(null);
     const [planMonth, setPlanMonth] = useState(ymOf(todayISO()));
+    const [planAuto, setPlanAuto] = useState(false);
     const [calMonth, setCalMonth] = useState(ymOf(todayISO()));
     const [sheet, setSheet] = useState(null);
+    const [help, setHelp] = useState(null); // null = closed, "" = open at top, "<id>" = open at section
+    const openHelp = (id) => setHelp(id || "");
     const [toastMsg, setToastMsg] = useState("");
     const toastT = useRef(null);
     const today = todayISO();
@@ -1231,10 +1297,12 @@
       setState(s);
       if (store) for (const k of LSStore.KEYS) store.save(k, s[k]);
     };
-    const go = (t, s) => {
+    const go = (t, s, auto) => {
+      if (t === "more" && s === "help") { setHelp(""); return; }
       setTab(t);
       setSheet(null);
       if (t === "plan" && s) setPlanMonth(s);
+      setPlanAuto(t === "plan" && !!auto);
       setSub(t === "more" ? s || null : null);
       window.scrollTo(0, 0);
     };
@@ -1311,15 +1379,15 @@
     const saveErr = saveStatus && saveStatus !== "saving" && saveStatus !== "saved";
 
     let body;
-    if (!state.meta.setupDone) body = html`<${Setup} today=${today} onDone=${finishSetup} />`;
+    if (!state.meta.setupDone) body = html`<${Setup} today=${today} onDone=${finishSetup} openHelp=${openHelp} />`;
     else if (tab === "today") body = html`<${Today} state=${state} today=${today} go=${go} openJourney=${openJourney} setAttendance=${setAttendance} openDay=${openDay} />`;
-    else if (tab === "plan") body = html`<${PlanScreen} state=${state} today=${today} month=${planMonth} setMonth=${setPlanMonth} acceptPlan=${acceptPlan} go=${go} />`;
+    else if (tab === "plan") body = html`<${PlanScreen} state=${state} today=${today} month=${planMonth} setMonth=${setPlanMonth} acceptPlan=${acceptPlan} go=${go} autoRun=${planAuto} clearAutoRun=${() => setPlanAuto(false)} openHelp=${openHelp} />`;
     else if (tab === "calendar") body = html`<${CalendarScreen} state=${state} today=${today} month=${calMonth} setMonth=${setCalMonth} openDay=${openDay} />`;
-    else if (tab === "travel") body = html`<${TravelScreen} state=${state} today=${today} openJourney=${openJourney} newJourney=${() => setSheet({ type: "journey", item: null })} />`;
+    else if (tab === "travel") body = html`<${TravelScreen} state=${state} today=${today} openJourney=${openJourney} newJourney=${() => setSheet({ type: "journey", item: null })} openHelp=${openHelp} />`;
     else if (sub === "compliance") body = html`<${ComplianceScreen} state=${state} today=${today} back=${back} />`;
     else if (sub === "family") body = html`<${FamilyScreen} state=${state} today=${today} back=${back} edit=${(f) => setSheet({ type: "family", item: f })} />`;
-    else if (sub === "rules") body = html`<${RulesScreen} state=${state} update=${update} back=${back} toast=${toast} editPolicy=${(p) => setSheet({ type: "policy", item: p })} />`;
-    else if (sub === "items") body = html`<${ItemsScreen} state=${state} today=${today} back=${back} edit=${(i) => setSheet({ type: "item", item: i })} />`;
+    else if (sub === "rules") body = html`<${RulesScreen} state=${state} update=${update} back=${back} toast=${toast} editPolicy=${(p) => setSheet({ type: "policy", item: p })} openHelp=${openHelp} />`;
+    else if (sub === "items") body = html`<${ItemsScreen} state=${state} today=${today} back=${back} edit=${(i) => setSheet({ type: "item", item: i })} openHelp=${openHelp} />`;
     else if (sub === "reports") body = html`<${ReportsScreen} state=${state} today=${today} back=${back} toast=${toast} />`;
     else if (sub === "data") body = html`<${DataScreen} state=${state} replaceState=${replaceState} back=${back} toast=${toast} storeLabel=${store ? store.label : ""} />`;
     else body = html`<${MoreScreen} go=${go} state=${state} today=${today} />`;
@@ -1341,12 +1409,14 @@
     const TABS = [["today", I.today, "Today"], ["plan", I.plan, "Plan"], ["calendar", I.cal, "Calendar"], ["travel", I.travel, "Travel"], ["more", I.more, "More"]];
     return html`<div class="app">
       <header class="topbar"><div class="brand"><${BrandMark} />LifeSync</div>
-        <span class=${"save-state" + (saveErr ? " err" : "")} role="status">${saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveErr ? saveStatus : ""}</span></header>
+        <div class="row" style="gap:8px"><span class=${"save-state" + (saveErr ? " err" : "")} role="status">${saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveErr ? saveStatus : ""}</span>
+        <button class="icon-btn help-btn" aria-label="Help" onClick=${() => openHelp("")}>${I.help}</button></div></header>
       <main>${body}</main>
       ${state.meta.setupDone ? html`<nav class="tabbar" aria-label="Main"><div class="tabbar-inner">
         ${TABS.map(([k, icon, label]) => html`<button class="tab" aria-current=${tab === k ? "page" : null} onClick=${() => go(k)}>${icon}<span>${label}</span>${k === "travel" && badge ? html`<span class="badge" aria-label=${badge + " urgent"}>${badge}</span>` : null}</button>`)}
       </div></nav>` : null}
       ${sheetEl}
+      ${help !== null ? html`<${HelpWindow} section=${help} onClose=${() => setHelp(null)} />` : null}
       ${toastMsg ? html`<div class="toast" role="status">${toastMsg}</div>` : null}
     </div>`;
   }

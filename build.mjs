@@ -9,6 +9,19 @@ const css = read("./src/styles.css");
 const engine = read("./src/engine.js");
 const store = read("./src/store.js");
 const app = read("./src/app.js");
+const help = read("./src/help.js");
+
+// Guard: the in-app help must be updated with every release.
+const helpVersion = (help.match(/version:\s*"([^"]+)"/) || [])[1];
+if (helpVersion !== VERSION) {
+  console.error(`\nHelp is out of date: src/help.js says version ${helpVersion}, package.json says ${VERSION}.`);
+  console.error("Update the affected help sections and add a 'whatsNew' entry in src/help.js, then set its version to " + VERSION + ".\n");
+  process.exit(1);
+}
+if (!new RegExp(`version:\\s*"${VERSION.replace(/\./g, "\\.")}",\\s*items`).test(help)) {
+  console.error(`\nsrc/help.js has no 'whatsNew' entry for ${VERSION}. Add one describing what changed.\n`);
+  process.exit(1);
+}
 const FONTS = "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap";
 const CDN = {
   htm: "https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.umd.js",
@@ -34,6 +47,9 @@ ${engine}
 </script>
 <script>
 ${store}
+</script>
+<script>
+${help}
 </script>
 <script>
 ${app}
@@ -70,6 +86,7 @@ const page = `<!doctype html>
 <script src="vendor/jspdf.umd.min.js" defer></script>
 <script src="engine.js?v=${VERSION}"></script>
 <script src="store.js?v=${VERSION}"></script>
+<script src="help.js?v=${VERSION}"></script>
 <script src="app.js?v=${VERSION}"></script>
 <script>
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
@@ -83,6 +100,7 @@ out("styles.css", css);
 out("engine.js", engine);
 out("store.js", store);
 out("app.js", app);
+out("help.js", help);
 out("icon.svg", icon);
 copyFileSync(new URL("./node_modules/htm/preact/standalone.umd.js", import.meta.url), new URL("./dist/pages/vendor/htm-preact.js", import.meta.url));
 copyFileSync(new URL("./node_modules/jspdf/dist/jspdf.umd.min.js", import.meta.url), new URL("./dist/pages/vendor/jspdf.umd.min.js", import.meta.url));
@@ -111,7 +129,7 @@ out(
     2
   )
 );
-const files = ["./", "index.html", "styles.css", "engine.js", "store.js", "app.js", "vendor/htm-preact.js", "vendor/jspdf.umd.min.js", "manifest.webmanifest", "icon.svg", "icon-192.png"];
+const files = ["./", "index.html", "styles.css", "engine.js", "store.js", "help.js", "app.js", "vendor/htm-preact.js", "vendor/jspdf.umd.min.js", "manifest.webmanifest", "icon.svg", "icon-192.png"];
 out(
   "sw.js",
   `// LifeSync offline cache. Bump the version (package.json) to ship an update.

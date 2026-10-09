@@ -374,3 +374,32 @@ test("moving a trip onto the same evening as a booked trip is refused with a rea
   assert.match(p.issues[0].text, /clashes with another fixed trip/);
   assert.equal(p.issues.length, 1);
 });
+
+test("office-closed days: work from home in Hyderabad, no office, requirement reduced", () => {
+  const s = base({
+    policies: [{ type: "monthlyMin", value: 12 }, { type: "fixedOffice", weekdays: [3] }],
+    calendar: [{ category: "office-closed", start: "2026-11-11", label: "Wellness day" }], // a Wednesday
+  });
+  const r = E.requirements("2026-11", s);
+  assert.equal(r.monthly.required, Math.ceil((12 * 20) / 21)); // 12 → 12 with one day off 21? ceil(11.43)=12
+  const p = E.planMonth("2026-11", s, { weights: { trips: 40 } });
+  assert.ok(p.feasible);
+  const d = p.days.find((x) => x.date === "2026-11-11");
+  assert.equal(d.mode, "closed");
+  assert.equal(d.location, "HYD");
+  assert.ok(E.explain(p, s).some((t) => /Office closed on 1 day: working from home in Hyderabad/.test(t)));
+  s.counting = { closedDaysReduceRequirement: false };
+  s.prefs.closedDaysAtHome = false;
+  const q = E.planMonth("2026-11", s, { weights: { trips: 40 } });
+  assert.equal(q.days.find((x) => x.date === "2026-11-11").mode, "closed");
+});
+
+test("two office-closed days reduce the monthly requirement", () => {
+  const s = base({
+    policies: [{ type: "monthlyMin", value: 12 }],
+    calendar: [{ category: "office-closed", start: "2026-11-12", end: "2026-11-13" }],
+  });
+  assert.equal(E.requirements("2026-11", s).monthly.required, 11); // ceil(12*19/21)
+  s.counting = { closedDaysReduceRequirement: false };
+  assert.equal(E.requirements("2026-11", s).monthly.required, 12);
+});

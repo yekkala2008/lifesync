@@ -64,6 +64,7 @@
    */
   const DEFAULT_COUNTING = {
     holidaysReduceRequirement: true, // a holiday removes a working day from the base
+    closedDaysReduceRequirement: true, // office closed (work from home) removes a working day too
     leaveReducesRequirement: true,
     businessTravelCountsAsWFO: false,
     partialWeeks: "prorate", // "prorate" | "full" | "ignore"
@@ -99,6 +100,7 @@
       const leave = itemsOn(items, iso, "leave")[0] || null;
       const business = itemsOn(items, iso, "business-travel")[0] || null;
       const blackout = itemsOn(items, iso, "blackout")[0] || null;
+      const closed = itemsOn(items, iso, "office-closed")[0] || null; // office shut, you still work
       const events = itemsOn(items, iso, "event");
       const workday = !isWeekend(iso) && !holiday && !leave;
       const fixedOffice = active.some(
@@ -118,9 +120,10 @@
         leave,
         business,
         blackout,
+        closed,
         events,
-        mustOffice: workday && !business && (fixedOffice || required),
-        noOffice: !workday || !!business || fixedWfh,
+        mustOffice: workday && !business && !closed && (fixedOffice || required),
+        noOffice: !workday || !!business || !!closed || fixedWfh,
         fixedWfh,
         pinnedLocation: pinned ? pinned.location : null,
         pinnedBy: pinned || null,
@@ -152,6 +155,7 @@
       if (isWeekend(d.date)) continue;
       if (d.holiday && c.holidaysReduceRequirement) continue;
       if (d.leave && c.leaveReducesRequirement) continue;
+      if (d.closed && c.closedDaysReduceRequirement) continue;
       base++;
     }
     if (monthlyP) {
@@ -174,6 +178,7 @@
         if (isWeekend(d.date)) continue;
         if (d.holiday && c.holidaysReduceRequirement) reduce++;
         else if (d.leave && c.leaveReducesRequirement) reduce++;
+        else if (d.closed && c.closedDaysReduceRequirement) reduce++;
       }
       const eligible = wdays.filter((d) => d.workday && !d.noOffice).length;
       let required = 0;
@@ -323,7 +328,7 @@
   function planMonth(ym, state, opts) {
     opts = opts || {};
     const prefs = Object.assign(
-      { startLocation: "HYD", minStayNights: 2, preferredTravelDays: [0, 5], endLocation: null, holidaysAtHome: true },
+      { startLocation: "HYD", minStayNights: 2, preferredTravelDays: [0, 5], endLocation: null, holidaysAtHome: true, closedDaysAtHome: true },
       state.prefs || {}
     );
     const w = Object.assign({}, DEFAULT_WEIGHTS, (state.prefs && state.prefs.weights) || {}, opts.weights || {});
@@ -418,6 +423,8 @@
       if (forced.has(d.date)) return forced.get(d.date) === loc;
       // Weekday holidays at home, unless a ticket or a must-attend event says otherwise.
       if (prefs.holidaysAtHome && d.holiday && !isWeekend(d.date) && !d.pinnedLocation && loc !== "HYD") return false;
+      // Office-closed days: work from home in Hyderabad, with the same exceptions.
+      if (prefs.closedDaysAtHome && d.closed && !d.holiday && !isWeekend(d.date) && !d.pinnedLocation && loc !== "HYD") return false;
       return true;
     }
     function officeOK(i, loc, office) {
@@ -514,7 +521,7 @@
     const planDays = days.map((d, i) => ({
       date: d.date,
       location: locs[i],
-      mode: office[i] ? "wfo" : d.workday ? "wfh" : d.holiday ? "holiday" : d.leave ? "leave" : "off",
+      mode: office[i] ? "wfo" : d.closed && d.workday ? "closed" : d.workday ? "wfh" : d.holiday ? "holiday" : d.leave ? "leave" : "off",
     }));
     const prevLoc = startLoc;
     const journeys = [];
@@ -552,6 +559,8 @@
     const hydWeekends = plan.days.filter((d) => d.location === "HYD" && isWeekend(d.date)).length;
     const hol = plan.days.filter((d) => d.mode === "holiday" && !isWeekend(d.date));
     const holidaysHome = hol.filter((d) => d.location === "HYD").length;
+    const closedDays = plan.days.filter((d) => d.mode === "closed");
+    const closedHome = closedDays.filter((d) => d.location === "HYD").length;
     const cost = (state.prefs && state.prefs.tripCost) || 0;
     return {
       wfo,
@@ -560,6 +569,8 @@
       daughterWindow,
       hydDays,
       weekdayHolidays: hol.length,
+      closedDays: closedDays.length,
+      closedHome,
       holidaysHome,
       hydWeekends,
       estCost: plan.journeys.length * cost,
@@ -637,6 +648,12 @@
         m.holidaysHome === m.weekdayHolidays
           ? `${m.weekdayHolidays === 1 ? "The weekday holiday is" : `All ${m.weekdayHolidays} weekday holidays are`} spent at home in Hyderabad.`
           : `${m.holidaysHome} of ${m.weekdayHolidays} weekday holidays at home; a ticket or event keeps you in Bengaluru for the rest.`
+      );
+    if (m.closedDays)
+      lines.push(
+        m.closedHome === m.closedDays
+          ? `Office closed on ${m.closedDays === 1 ? "1 day" : m.closedDays + " days"}: working from home in Hyderabad.`
+          : `Office closed on ${m.closedDays} days: ${m.closedHome} worked from Hyderabad; a ticket or event keeps you in Bengaluru for the rest.`
       );
     return lines;
   }
@@ -746,7 +763,7 @@
       family: (state.family || []).filter((f) => touches(f.start, f.end)).map((f) => [f.person, f.start, f.end, f.status, f.location]),
       journeys: (state.journeys || []).filter((j) => (["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled")) && !planTrips.has(`${j.date}|${j.from}|${j.to}`)).map((j) => [j.date, j.from, j.to, j.status, !!j.locked]),
       counting: state.counting || {},
-      prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome] : null,
+      prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome, state.prefs.closedDaysAtHome] : null,
     };
     const str = JSON.stringify(pick);
     let h = 2166136261;

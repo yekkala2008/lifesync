@@ -24,7 +24,12 @@ const access = read("./src/access.js");
 
 // Invite-only codes come from the environment (a GitHub Actions secret). Only
 // salted hashes are written into the app; the codes themselves never are.
-const codes = (process.env.LIFESYNC_ACCESS_CODES || "").split(",").map((c) => c.trim().toLowerCase().replace(/\s+/g, "")).filter(Boolean);
+// Accept codes separated by commas, semicolons or new lines, with or without
+// quotes, so however the secret was typed, each code comes out on its own.
+const normalCode = (c) => String(c || "").trim().replace(/^["'`]+|["'`]+$/g, "").toLowerCase().replace(/\s+/g, "");
+const codes = [...new Set((process.env.LIFESYNC_ACCESS_CODES || "").split(/[,;\r\n]+/).map(normalCode).filter(Boolean))];
+// Safe summary for the build log: first letter, length and last letter of each code.
+const codeHints = codes.map((c) => `${c[0]}…${c[c.length - 1]} (${c.length} chars)`).join(", ");
 const short = codes.filter((c) => c.length < 8);
 if (short.length) console.warn(`Warning: ${short.length} access code(s) are shorter than 8 characters and easy to guess.`);
 // Fixed salt: hashes stay the same across builds, so updates don't ask people
@@ -185,4 +190,4 @@ self.addEventListener("fetch", (e) => {
 `
 );
 out(".nojekyll", "");
-console.log("Built dist/lifesync.html and dist/pages/ (v" + VERSION + ")" + (codes.length ? ` · invite-only with ${codes.length} access code(s)` : " · open to anyone with the link"));
+console.log("Built dist/lifesync.html and dist/pages/ (v" + VERSION + ")" + (codes.length ? ` · invite-only with ${codes.length} access code(s): ${codeHints}` : " · open to anyone with the link"));

@@ -13,10 +13,14 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.10.1",
+    version: "0.10.2",
     updated: "2026-10-10",
 
     whatsNew: [
+      {
+        version: "0.10.2",
+        items: ["Access codes work however they're entered in the GitHub secret: separated by commas or new lines, with or without quotes."],
+      },
       {
         version: "0.10.1",
         items: ["The gold signature now appears at the bottom of every screen."],
@@ -279,7 +283,7 @@
 <p><b>Making it invite-only (owner):</b></p>
 <ol>
 <li>On GitHub, open the <b>lifesync</b> repository → <b>Settings → Secrets and variables → Actions</b>.</li>
-<li>Tap <b>New repository secret</b>. Name: <b>LIFESYNC_ACCESS_CODES</b>. Value: one or more codes separated by commas, such as <i>blue-mango-2026, team-kite-81</i>. Use 8 characters or more.</li>
+<li>Tap <b>New repository secret</b>. Name: <b>LIFESYNC_ACCESS_CODES</b>. Value: one or more codes separated by commas or on separate lines, such as <i>blue-mango-2026, team-kite-81</i>. Use 8 characters or more.</li>
 <li>Go to <b>Actions → Test and publish LifeSync → Run workflow</b>.</li>
 </ol>
 <p>From then on, new people see an <b>Invite only</b> screen and enter a code once per phone. You keep using it as normal on phones that already have access. To stop a code working, remove it from the secret and run the workflow again; phones that used it are asked for a new code.</p>

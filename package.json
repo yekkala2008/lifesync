@@ -1,6 +1,6 @@
 {
   "name": "lifesync",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "private": true,
   "description": "LifeSync: work, travel and family planner for Bengaluru and Hyderabad",
   "scripts": {

@@ -16,7 +16,8 @@
   "use strict";
   const KEY = "lifesync.access";
   const cfg = () => root.LSAccessConfig || { hashes: [], salt: "" };
-  const normal = (c) => String(c || "").trim().toLowerCase().replace(/\s+/g, "");
+  // Must match normalCode() in build.mjs.
+  const normal = (c) => String(c || "").trim().replace(/^["'`]+|["'`]+$/g, "").toLowerCase().replace(/\s+/g, "");
   async function sha256(text) {
     const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
     return Array.from(new Uint8Array(d), (x) => x.toString(16).padStart(2, "0")).join("");

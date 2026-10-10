@@ -13,10 +13,21 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.9.0",
+    version: "0.10.1",
     updated: "2026-10-10",
 
     whatsNew: [
+      {
+        version: "0.10.1",
+        items: ["The gold signature now appears at the bottom of every screen."],
+      },
+      {
+        version: "0.10.0",
+        items: [
+          "The signature is now Srinivas Yekkala's own handwriting in gold foil.",
+          "Today offers to <b>set up App lock</b>, and once it's on, a lock button at the top locks LifeSync straight away.",
+        ],
+      },
       {
         version: "0.9.0",
         items: [
@@ -253,6 +264,8 @@
 <li>Confirm with your fingerprint, face, PIN or pattern.</li>
 <li>Save the <b>recovery code</b> it shows you somewhere outside LifeSync. It's shown only once.</li>
 </ol>
+<p>App lock is off until you turn it on. Today shows <b>Protect LifeSync with your fingerprint</b> until you set it up or tap <b>Not now</b>.</p>
+<p>Once it's on, tap the <b>lock</b> button at the top of any screen to lock LifeSync immediately.</p>
 <p>Choose when it locks again under <b>Lock again when I leave the app</b>: immediately, or after 1, 5 or 15 minutes away.</p>
 <p><b>Can't unlock?</b> On the lock screen tap <b>Can't unlock?</b> and enter your recovery code. LifeSync opens and the lock is turned off; turn it on again in More → App lock.</p>
 <p>To turn it off, go to <b>More → App lock → Turn off App lock</b>. It asks you to unlock first.</p>

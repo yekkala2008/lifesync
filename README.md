@@ -94,4 +94,4 @@ These are settings, not assumptions baked into code (**More → Rules & preferen
 - Optional cloud sync.
 
 
-The signature uses the Monoton typeface by Vernon Adams, under the SIL Open Font License, bundled from @fontsource/monoton.
+The signature is Srinivas Yekkala's own handwritten signature (public/signature.png); the name is set in Cormorant Garamond by Christian Thalmann, under the SIL Open Font License, bundled from @fontsource/cormorant-garamond.

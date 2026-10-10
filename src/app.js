@@ -143,9 +143,11 @@
   I.finger = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6.5 6.5A8 8 0 0 1 20 12v1.5"/><path d="M4 11a8 8 0 0 1 1-3.5M4.3 15.5c.4-1.2.7-2.7.7-4.5"/><path d="M8 18.5c.7-1.8 1-4 1-6.5a3 3 0 0 1 6 0c0 1.5-.1 3-.4 4.4"/><path d="M12 12c0 3.2-.6 6-1.8 8.5M14 19.5c.3-.7.6-1.5.8-2.3M17.5 17c.3-1.2.5-2.6.5-4"/></svg>`;
   I.share = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg>`;
   I.help = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01"/></svg>`;
-  const Signature = ({ compact }) => html`<div class=${"signature" + (compact ? " compact" : "")}>
-    <span class="sig-by">Designed & built by</span>
-    <span class="sig-name" aria-label="Srinivas Yekkala"><span>Srinivas</span> <span>Yekkala</span></span>
+  const Signature = ({ compact }) => html`<div class=${"signature" + (compact ? " compact" : "")} role="img" aria-label="Designed and built by Srinivas Yekkala">
+    <span class="sig-by" aria-hidden="true">Designed & built by</span>
+    <span class="sig-mark" aria-hidden="true"></span>
+    <span class="sig-flourish" aria-hidden="true"><i></i>◆<i></i></span>
+    <span class="sig-name" aria-hidden="true">Srinivas Yekkala</span>
   </div>`;
   const BrandMark = () => html`<svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
     <path d="M7 19 C 7 9, 21 19, 21 9" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="2 2.4" stroke-linecap="round"/>
@@ -427,6 +429,22 @@
   }
 
   // ------------------------------------------------------------ screens: Today
+  function LockOffer({ go }) {
+    const [show, setShow] = useState(false);
+    useEffect(() => {
+      let dismissed = false;
+      try { dismissed = localStorage.getItem("lifesync.lockOffer") === "no"; } catch (e) {}
+      if (dismissed || !window.LSLock || LSLock.read()) return;
+      LSLock.unsupportedReason().then((r) => setShow(!r));
+    }, []);
+    if (!show) return null;
+    const later = () => { try { localStorage.setItem("lifesync.lockOffer", "no"); } catch (e) {} setShow(false); };
+    return html`<${Alert} tone="info" title="Protect LifeSync with your fingerprint">
+      <p class="small">Ask for your phone's fingerprint, face, PIN or pattern every time LifeSync opens.</p>
+      <div class="btn-row"><button class="btn small primary" onClick=${() => go("more", "lock")}>Set up App lock</button><button class="btn small" onClick=${later}>Not now</button></div>
+    </${Alert}>`;
+  }
+
   function Today({ state, today, go, openJourney, setAttendance, openDay, openConfirm }) {
     const ym = ymOf(today);
     const plan = acceptedPlan(state, ym);
@@ -455,6 +473,7 @@
         <p class="small">Rules, dates and the booked journey are samples so you can see how LifeSync works. Replace them with your own, or remove them in Backup & data.</p>
         <div><button class="link" onClick=${() => go("more", "data")}>Remove example data</button></div></${Alert}>` : null}
 
+      ${state.meta.example ? null : html`<${LockOffer} go=${go} />`}
       ${stale.map((m) => html`<${Alert} tone="warn" title=${`Your ${fMonthShort(m)} plan may be out of date`}>
         <p class="small">A rule, holiday, family date or booked journey changed after you saved it.</p>
         <div><button class="btn small primary" onClick=${() => go("plan", m, true)}>Review an updated plan</button></div></${Alert}>`)}
@@ -1413,6 +1432,7 @@
         <div class="row between"><h3>Status</h3>${lockCfg ? html`<span class="pill ok"><span class="glyph">✓</span>On</span>` : html`<span class="pill neutral">Off</span>`}</div>
         ${reason === null ? html`<p class="small muted">Checking your phone…</p>` : reason && !lockCfg ? html`<${Alert} tone="info"><p class="small">${reason}</p></${Alert}>` : null}
         <${Field} label="Lock again when I leave the app" id="lk-delay"><select id="lk-delay" value=${String(delay)} onChange=${(e) => changeDelay(Number(e.target.value))}>${RELOCK.map(([v, t]) => html`<option value=${String(v)}>${t}</option>`)}</select></${Field}>
+        ${lockCfg ? html`<p class="small">LifeSync now asks for your fingerprint when it opens, and ${delay === 0 ? "as soon as you leave it" : `when you come back after ${RELOCK.find((x) => x[0] === delay)[1].replace("After ", "")} away`}. Tap the ${I.lock} at the top of any screen to lock it now.</p>` : null}
         ${lockCfg
           ? html`<div class="btn-row"><button class="btn" disabled=${busy} onClick=${test}>Test unlock</button><button class="btn danger" disabled=${busy} onClick=${turnOff}>Turn off App lock</button></div>
              <p class="tiny muted">Turning it off asks you to unlock first.</p>`
@@ -1546,7 +1566,6 @@
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">More</span><h1>Settings & tools</h1></div>
       <div class="more-grid">${tiles.map(([k, icon, t, sub]) => html`<button class="tile" onClick=${() => go("more", k)}>${icon}<strong>${t}</strong><span class="tiny muted">${sub}</span></button>`)}</div>
-      <div class="credit-card"><${Signature} /><span class="tiny muted">LifeSync · version ${(window.LSHelp && LSHelp.version) || ""}</span></div>
     </div>`;
   }
 
@@ -1589,7 +1608,6 @@
         <${Field} label="Where are you at the start of this month?" id="s-start"><select id="s-start" value=${start} onChange=${(e) => setStart(e.target.value)}><option value="HYD">${CITY.HYD}</option><option value="BLR">${CITY.BLR}</option></select></${Field}>
         <button class="btn primary block" onClick=${finish}>Save and start</button>
       </div>
-      <div class="credit-card"><${Signature} /></div>
       <div class="card"><h3>Just looking?</h3><p class="small muted">Load a sample month with example rules, a holiday, your daughter's dates and a booked train, all clearly marked so you can remove them later.</p>
         <button class="btn block" onClick=${() => onDone(exampleState(today), true)}>Explore with example data</button></div>
     </div>`;
@@ -1781,8 +1799,13 @@
     return html`<div class="app">
       <header class="topbar"><div class="brand"><${BrandMark} />LifeSync</div>
         <div class="row" style="gap:8px"><span class=${"save-state" + (saveErr ? " err" : "")} role="status">${saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveErr ? saveStatus : ""}</span>
+        ${lockCfg ? html`<button class="icon-btn help-btn" aria-label="Lock now" title="Lock now" onClick=${() => setLocked(true)}>${I.lock}</button>` : null}
         <button class="icon-btn help-btn" aria-label="Help" onClick=${() => openHelp("")}>${I.help}</button></div></header>
       <main>${body}</main>
+      <footer class=${"credit-card app-credit" + (tab === "more" && !sub ? " full" : "")}>
+        <${Signature} compact=${!(tab === "more" && !sub)} />
+        ${tab === "more" && !sub ? html`<span class="tiny muted">LifeSync · version ${(window.LSHelp && LSHelp.version) || ""}</span>` : null}
+      </footer>
       ${state.meta.setupDone ? html`<nav class="tabbar" aria-label="Main"><div class="tabbar-inner">
         ${TABS.map(([k, icon, label]) => html`<button class="tab" aria-current=${tab === k ? "page" : null} onClick=${() => go(k)}>${icon}<span>${label}</span>${k === "travel" && badge ? html`<span class="badge" aria-label=${badge + " urgent"}>${badge}</span>` : null}</button>`)}
       </div></nav>` : null}

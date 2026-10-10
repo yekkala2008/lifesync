@@ -6,9 +6,14 @@ import { createHash } from "node:crypto";
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const VERSION = JSON.parse(read("./package.json")).version;
-// Signature font (Monoton, SIL Open Font License) is bundled so it works offline.
-const sigFont = readFileSync(new URL("./node_modules/@fontsource/monoton/files/monoton-latin-400-normal.woff2", import.meta.url));
-const sigFace = (src) => `@font-face { font-family: "Monoton"; font-style: normal; font-weight: 400; font-display: swap; src: url(${src}) format("woff2"); }\n`;
+// Signature: the owner's handwritten signature (transparent PNG used as a mask,
+// so it can be gold in both themes) and the name in Cormorant Garamond
+// (SIL Open Font License). Both are bundled so they work offline.
+const sigFont = readFileSync(new URL("./node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-600-normal.woff2", import.meta.url));
+const sigImg = readFileSync(new URL("./public/signature.png", import.meta.url));
+const sigFace = (font, img) =>
+  `@font-face { font-family: "Cormorant Garamond"; font-style: normal; font-weight: 600; font-display: swap; src: url(${font}) format("woff2"); }\n` +
+  `.sig-mark { -webkit-mask-image: url(${img}); mask-image: url(${img}); }\n`;
 const css = read("./src/styles.css");
 const engine = read("./src/engine.js");
 const store = read("./src/store.js");
@@ -53,7 +58,7 @@ const artifact = `<title>LifeSync</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">
 <style>
-${sigFace("data:font/woff2;base64," + sigFont.toString("base64"))}${css}
+${sigFace("data:font/woff2;base64," + sigFont.toString("base64"), "data:image/png;base64," + sigImg.toString("base64"))}${css}
 </style>
 <div id="app"></div>
 <script src="${CDN.htm}"></script>
@@ -121,8 +126,9 @@ if ("serviceWorker" in navigator) addEventListener("load", () => navigator.servi
 `;
 const out = (p, s) => writeFileSync(new URL("./dist/pages/" + p, import.meta.url), s);
 out("index.html", page);
-out("styles.css", sigFace("vendor/monoton.woff2") + css);
-writeFileSync(new URL("./dist/pages/vendor/monoton.woff2", import.meta.url), sigFont);
+out("styles.css", sigFace("vendor/cormorant-600.woff2", "signature.png") + css);
+writeFileSync(new URL("./dist/pages/vendor/cormorant-600.woff2", import.meta.url), sigFont);
+writeFileSync(new URL("./dist/pages/signature.png", import.meta.url), sigImg);
 out("engine.js", engine);
 out("store.js", store);
 out("app.js", app);
@@ -158,7 +164,7 @@ out(
     2
   )
 );
-const files = ["./", "index.html", "styles.css", "engine.js", "store.js", "help.js", "lock.js", "access-config.js", "access.js", "app.js", "vendor/htm-preact.js", "vendor/monoton.woff2", "vendor/jspdf.umd.min.js", "manifest.webmanifest", "icon.svg", "icon-192.png"];
+const files = ["./", "index.html", "styles.css", "engine.js", "store.js", "help.js", "lock.js", "access-config.js", "access.js", "app.js", "vendor/htm-preact.js", "vendor/cormorant-600.woff2", "signature.png", "vendor/jspdf.umd.min.js", "manifest.webmanifest", "icon.svg", "icon-192.png"];
 out(
   "sw.js",
   `// LifeSync offline cache. Bump the version (package.json) to ship an update.

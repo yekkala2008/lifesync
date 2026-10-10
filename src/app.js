@@ -139,7 +139,14 @@
     data: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6M5 12v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6"/></svg>`,
     items: html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M8.5 14.5h3"/></svg>`,
   };
+  I.lock = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><circle cx="12" cy="15.5" r="1.3" fill="currentColor"/></svg>`;
+  I.finger = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6.5 6.5A8 8 0 0 1 20 12v1.5"/><path d="M4 11a8 8 0 0 1 1-3.5M4.3 15.5c.4-1.2.7-2.7.7-4.5"/><path d="M8 18.5c.7-1.8 1-4 1-6.5a3 3 0 0 1 6 0c0 1.5-.1 3-.4 4.4"/><path d="M12 12c0 3.2-.6 6-1.8 8.5M14 19.5c.3-.7.6-1.5.8-2.3M17.5 17c.3-1.2.5-2.6.5-4"/></svg>`;
+  I.share = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg>`;
   I.help = html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01"/></svg>`;
+  const Signature = ({ compact }) => html`<div class=${"signature" + (compact ? " compact" : "")}>
+    <span class="sig-by">Designed & built by</span>
+    <span class="sig-name" aria-label="Srinivas Yekkala"><span>Srinivas</span> <span>Yekkala</span></span>
+  </div>`;
   const BrandMark = () => html`<svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
     <path d="M7 19 C 7 9, 21 19, 21 9" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="2 2.4" stroke-linecap="round"/>
     <circle cx="7" cy="20" r="4.5" fill="var(--hyd)"/><circle cx="21" cy="8" r="4.5" fill="var(--blr)"/></svg>`;
@@ -407,6 +414,15 @@
     if (!r.actions.length && !r.unlogged.length) line("Nothing outstanding.", 10, "normal", [86, 100, 92]);
     r.actions.forEach((a) => line(`• ${fDay(a.journey.date)} ${CITY[a.journey.from]} > ${CITY[a.journey.to]}: ${a.text}`, 9.5));
     if (r.unlogged.length) line(`• ${r.unlogged.length} planned office day(s) not yet logged: ${r.unlogged.map(fDay).join(", ")}`, 9.5);
+    const pages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(120, 130, 124);
+      doc.text("LifeSync · designed & built by Srinivas Yekkala", M, doc.internal.pageSize.getHeight() - 24);
+      doc.text(`${i} / ${pages}`, W - M, doc.internal.pageSize.getHeight() - 24, { align: "right" });
+    }
     return doc.output("blob");
   }
 
@@ -566,7 +582,7 @@
       <div><span class="v">${m.trips}</span><span class="k">one-way trips</span></div>
       <div><span class="v">${m.daughterWindow ? `${m.daughterDays}/${m.daughterWindow}` : "—"}</span><span class="k">daughter days covered</span></div>
       <div><span class="v">${m.hydWeekends}</span><span class="k">home weekend days</span></div>
-    </div>`;
+    </div>${m.cityWfh ? html`<span class="tiny muted">${m.cityWfh} work-from-home ${m.cityWfh === 1 ? "day" : "days"} in ${CITY.BLR} · ${m.hydDays} days in ${CITY.HYD}</span>` : html`<span class="tiny muted">${m.hydDays} days in ${CITY.HYD}</span>`}`;
   }
   const tripKey = (j) => `${j.date}|${j.from}|${j.to}`;
   const arriveLabel = (j) => "arrive " + fmt(E.addDays(j.date, 1), { weekday: "short", day: "numeric" });
@@ -617,7 +633,23 @@
     </${Sheet}>`;
   }
 
-  function PlanScreen({ state, today, month, setMonth, acceptPlan, go, autoRun, clearAutoRun, openHelp }) {
+  function PlanInputs({ ym, value, usual, overridden, onChange, onReset }) {
+    const set = (n) => onChange(Math.max(0, Math.min(20, n)));
+    return html`<div class="card plan-inputs">
+      <div class="row between">
+        <div class="stack" style="gap:2px"><h3>Work from home in ${CITY.BLR}</h3><span class="small muted">Days in ${fMonthShort(ym)} you'll stay in ${CITY.BLR} but not go to the office. Planned on top of your office days.</span></div>
+      </div>
+      <div class="stepper" role="group" aria-label=${"Work from home days in " + CITY.BLR}>
+        <button class="icon-btn" aria-label="One day fewer" disabled=${value <= 0} onClick=${() => set(value - 1)}>−</button>
+        <input id="pi-wfh" type="number" inputmode="numeric" min="0" max="20" value=${value} onInput=${(e) => set(Number(e.target.value) || 0)} aria-label="Days" />
+        <span class="small">${value === 1 ? "day" : "days"}</span>
+        <button class="icon-btn" aria-label="One day more" onClick=${() => set(value + 1)}>+</button>
+      </div>
+      <span class="tiny muted">${overridden ? html`Just for ${fMonthShort(ym)}. Your usual is ${usual}. <button class="link tiny-link" onClick=${onReset}>Use usual</button>` : `Your usual number (set in Rules & preferences). Change it here for ${fMonthShort(ym)} only.`}</span>
+    </div>`;
+  }
+
+  function PlanScreen({ state, today, month, setMonth, acceptPlan, go, autoRun, clearAutoRun, openHelp, setCityWfh }) {
     const ym = month;
     const current = acceptedPlan(state, ym);
     const stale = current && current.fingerprint !== E.inputsFingerprint(ym, state, current);
@@ -640,7 +672,11 @@
       clearAutoRun();
     }, [autoRun]);
     const months = [ymOf(today), addMonths(ymOf(today), 1), addMonths(ymOf(today), 2)];
-    const compute = (a) => E.proposePlans(ym, state, { startLocation: startLocationFor(state, ym), fixedDays: fixedDaysFor(state, ym, today), today, pinTrips: a.pins, noTravel: a.noTravel });
+    const cityWfh = E.officeCityWfhFor(state, ym);
+    const cityWfhUsual = Math.max(0, Number(state.prefs.officeCityWfhDefault) || 0);
+    const cityWfhOver = ((state.prefs.officeCityWfh || {})[ym] != null);
+    const compute = (a, wfh) => E.proposePlans(ym, state, {
+      officeCityWfh: wfh != null ? wfh : cityWfh, startLocation: startLocationFor(state, ym), fixedDays: fixedDaysFor(state, ym, today), today, pinTrips: a.pins, noTravel: a.noTravel });
     const run = () => {
       setAdj(EMPTY_ADJ);
       setHistory([]);
@@ -677,6 +713,15 @@
       setRejected(null);
       setResult(r);
     };
+    const changeCityWfh = (n) => {
+      setCityWfh(ym, n);
+      if (result) {
+        const r = compute(adj, n == null ? cityWfhUsual : n);
+        setRejected(null);
+        setResult(r);
+        setPick(0);
+      }
+    };
     const changed = adj.pins.length + adj.noTravel.length > 0;
     const req = E.requirements(ym, state);
     const counting = req.counting;
@@ -699,6 +744,8 @@
         <span class="tiny muted">Saved ${fDay(current.createdAt.slice(0, 10))}</span>
         <div class="btn-row"><button class=${"btn " + (stale ? "primary" : "")} onClick=${run}>${stale ? "Review an updated plan" : "Change travel dates"}</button>${stale ? null : html`<button class="btn" onClick=${run}>Make a new plan</button>`}</div>
       </div>` : null}
+
+      ${!confirm ? html`<${PlanInputs} ym=${ym} value=${cityWfh} usual=${cityWfhUsual} overridden=${cityWfhOver && cityWfh !== cityWfhUsual} onChange=${changeCityWfh} onReset=${() => changeCityWfh(null)} />` : null}
 
       ${!current && !result ? html`<div class="card">
         <h3>No plan for ${fMonthShort(ym)} yet</h3>
@@ -725,9 +772,9 @@
           ${adj.noTravel.map((d) => html`<div class="row between small"><span>No travel ${fDay(d)} evening</span><button class="icon-btn mini" aria-label="Remove this change" onClick=${() => applyAdj({ pins: adj.pins, noTravel: adj.noTravel.filter((x) => x !== d) }, "Removing that change")}>${I.close}</button></div>`)}
           <span class="tiny muted">Every option below respects these changes and still meets your office rules.</span>
         </div>` : null}
-        <p class="small">${result.askUser ? "These options trade trips against family time in different ways. Pick one, then tap any trip to change its date." : "One option stands out. Tap any trip to change its date."}</p>
+        <p class="small">${result.askUser ? "Balanced is the recommended mix. Most home time and Fewest trips trade one for the other. Pick one, then tap any trip to change its date." : "One option stands out. Tap any trip to change its date."}</p>
         <div class="plans">${result.plans.map((p, i) => html`<div class="plan-card" role="button" tabindex="0" aria-pressed=${String(pick === i)} onClick=${selectCard(i)} onKeyDown=${selectCard(i)}>
-          <div class="row between"><h3>${p.label}${i === 0 && !changed ? html` <span class="pill info" style="margin-left:6px">Recommended</span>` : null}</h3><span class="small muted">${p.metrics.estCost ? "≈ " + rupees(p.metrics.estCost) : ""}</span></div>
+          <div class="row between"><h3>${p.label}${p.profile === "balanced" ? html` <span class="pill info" style="margin-left:6px">Recommended</span>` : null}</h3><span class="small muted">${p.metrics.estCost ? "≈ " + rupees(p.metrics.estCost) : ""}</span></div>
           <${Strip} days=${p.days} /><${Metrics} m=${p.metrics} />
           <${TravelDates} journeys=${p.journeys} state=${state} today=${today} pins=${adj.pins} onEdit=${(j) => { setPick(i); setEditing(j); }} />
           ${pick === i ? html`<ul class="why">${p.explanation.map((t) => html`<li>${t}</li>`)}</ul>` : null}
@@ -1062,6 +1109,11 @@
           : html`<div class="list"><div class="empty">No office rules yet. Add your monthly or weekly minimum.</div></div>`}
       </div>
 
+      <div class="card"><h3>Work from home in ${CITY.BLR}</h3>
+        <p class="small muted">Your usual number of days a month to stay in ${CITY.BLR} without going to the office. Every month's plan starts from this; change a single month on the Plan screen.</p>
+        <${Field} label="Usual days per month" id="r-cwfh"><input id="r-cwfh" type="number" inputmode="numeric" min="0" max="20" value=${p.officeCityWfhDefault || 0} onInput=${(e) => setP("officeCityWfhDefault", Math.max(0, Math.min(20, Number(e.target.value) || 0)))} /></${Field}>
+      </div>
+
       <div class="card"><h3>How days are counted</h3>
         <p class="small muted">Confirm these against your company's policy. They change how many office days you need.</p>
         <label class="check"><input type="checkbox" id="c-hol" checked=${c.holidaysReduceRequirement} onChange=${(e) => setC("holidaysReduceRequirement", e.target.checked)} />Public holidays reduce the number of office days I need</label>
@@ -1249,6 +1301,189 @@
     </div>`;
   }
 
+  // ------------------------------------------------------------ App lock
+  const RELOCK = [[0, "Immediately"], [60, "After 1 minute"], [300, "After 5 minutes"], [900, "After 15 minutes"]];
+
+  function LockScreen({ cfg, onUnlocked, onRecovered }) {
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState("");
+    const [recover, setRecover] = useState(false);
+    const [code, setCode] = useState("");
+    const tried = useRef(false);
+    const go = async () => {
+      if (busy) return;
+      setBusy(true);
+      setErr("");
+      try {
+        await LSLock.unlock(cfg);
+        onUnlocked();
+      } catch (e) {
+        setErr(e.message);
+      }
+      setBusy(false);
+    };
+    useEffect(() => {
+      if (tried.current) return;
+      tried.current = true;
+      setTimeout(go, 250); // ask straight away; the button is there if the phone wants a tap
+    }, []);
+    const useCode = async () => {
+      if (await LSLock.checkRecovery(cfg, code)) onRecovered();
+      else setErr("That recovery code doesn't match. Check it and try again.");
+    };
+    return html`<div class="lock-screen" role="dialog" aria-modal="true" aria-label="LifeSync is locked">
+      <div class="lock-inner">
+        <div class="brand" style="font-size:22px"><${BrandMark} />LifeSync</div>
+        <div class="lock-icon" aria-hidden="true">${I.lock}</div>
+        <h1 style="font-size:22px">LifeSync is locked</h1>
+        <p class="small muted">Unlock with your phone's fingerprint, face, PIN or pattern.</p>
+        <button class="btn primary block lock-btn" onClick=${go} disabled=${busy}>${I.finger}${busy ? "Waiting for your phone…" : "Unlock"}</button>
+        ${err ? html`<p class="small" style="color:var(--bad)" role="alert">${err}</p>` : null}
+        ${!recover
+          ? html`<button class="link" onClick=${() => { setRecover(true); setErr(""); }}>Can't unlock?</button>`
+          : html`<div class="card" style="width:100%;text-align:left">
+              <h3>Use your recovery code</h3>
+              <p class="small muted">You saw this code when you turned on App lock. Entering it opens LifeSync and turns the lock off. You can turn it on again in More → App lock.</p>
+              <${Field} label="Recovery code" id="rc-code"><input id="rc-code" type="text" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX-XXXX" value=${code} onInput=${(e) => setCode(e.target.value)} /></${Field}>
+              <button class="btn" disabled=${code.replace(/[^A-Za-z0-9]/g, "").length < 16} onClick=${useCode}>Open with recovery code</button>
+            </div>`}
+        <div style="margin-top:28px"><${Signature} compact /></div>
+      </div>
+    </div>`;
+  }
+
+  function AppLockScreen({ back, lockCfg, setLockCfg, toast, userName }) {
+    const [reason, setReason] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState("");
+    const [shown, setShown] = useState(null); // recovery code to show once
+    const [saved, setSaved] = useState(false);
+    const [delay, setDelay] = useState(lockCfg ? lockCfg.relockAfter : 60);
+    useEffect(() => { LSLock.unsupportedReason().then(setReason); }, []);
+    const turnOn = async () => {
+      setBusy(true); setErr("");
+      try {
+        const r = await LSLock.enable({ relockAfter: delay, displayName: userName ? `${userName} · LifeSync` : "LifeSync app lock" });
+        setShown(r.recovery);
+        setLockCfg(r.cfg);
+      } catch (e) {
+        setErr(e && e.name === "NotAllowedError" ? "Cancelled. Nothing was changed." : (e && e.message) || "Couldn't turn on App lock.");
+      }
+      setBusy(false);
+    };
+    const turnOff = async () => {
+      setBusy(true); setErr("");
+      try {
+        await LSLock.unlock(lockCfg);
+        LSLock.disable();
+        setLockCfg(null);
+        toast("App lock turned off");
+      } catch (e) { setErr(e.message); }
+      setBusy(false);
+    };
+    const test = async () => {
+      setBusy(true); setErr("");
+      try { await LSLock.unlock(lockCfg); toast("Unlock works"); } catch (e) { setErr(e.message); }
+      setBusy(false);
+    };
+    const changeDelay = (v) => {
+      setDelay(v);
+      if (lockCfg) { const c = Object.assign({}, lockCfg, { relockAfter: v }); LSLock.write(c); setLockCfg(c); }
+    };
+    const copy = (text) => {
+      try { navigator.clipboard.writeText(text).then(() => toast("Recovery code copied"), () => toast("Select the code and copy it")); }
+      catch (e) { toast("Select the code and copy it"); }
+    };
+    return html`<div class="page">
+      <button class="link back" onClick=${back}>${I.left}More</button>
+      <div class="page-head"><span class="eyebrow">Security</span><h1>App lock</h1></div>
+      <p class="small muted">Ask for your phone's fingerprint, face, PIN or pattern every time LifeSync opens. Your phone does the check; LifeSync never sees your fingerprint or PIN.</p>
+
+      ${shown ? html`<div class="card raised">
+        <h3>Save your recovery code</h3>
+        <p class="small">If your phone's lock ever stops working with LifeSync (for example after resetting your fingerprints), this code opens the app. It's shown only once.</p>
+        <div class="recovery mono" aria-label="Recovery code">${shown}</div>
+        <div class="btn-row"><button class="btn" onClick=${() => copy(shown)}>Copy code</button></div>
+        <p class="tiny muted">Keep it somewhere safe outside LifeSync, such as your password manager or a note on your laptop.</p>
+        <label class="check"><input type="checkbox" id="rc-saved" checked=${saved} onChange=${(e) => setSaved(e.target.checked)} />I've saved my recovery code</label>
+        <button class="btn primary" disabled=${!saved} onClick=${() => { setShown(null); toast("App lock is on"); }}>Done</button>
+      </div>` : null}
+
+      ${!shown ? html`<div class="card">
+        <div class="row between"><h3>Status</h3>${lockCfg ? html`<span class="pill ok"><span class="glyph">✓</span>On</span>` : html`<span class="pill neutral">Off</span>`}</div>
+        ${reason === null ? html`<p class="small muted">Checking your phone…</p>` : reason && !lockCfg ? html`<${Alert} tone="info"><p class="small">${reason}</p></${Alert}>` : null}
+        <${Field} label="Lock again when I leave the app" id="lk-delay"><select id="lk-delay" value=${String(delay)} onChange=${(e) => changeDelay(Number(e.target.value))}>${RELOCK.map(([v, t]) => html`<option value=${String(v)}>${t}</option>`)}</select></${Field}>
+        ${lockCfg
+          ? html`<div class="btn-row"><button class="btn" disabled=${busy} onClick=${test}>Test unlock</button><button class="btn danger" disabled=${busy} onClick=${turnOff}>Turn off App lock</button></div>
+             <p class="tiny muted">Turning it off asks you to unlock first.</p>`
+          : html`<button class="btn primary" disabled=${busy || !!reason} onClick=${turnOn}>${I.lock}${busy ? "Waiting for your phone…" : "Turn on App lock"}</button>`}
+        ${err ? html`<p class="small" style="color:var(--bad)" role="alert">${err}</p>` : null}
+      </div>` : null}
+
+      <div class="card"><h3>Good to know</h3><ul class="why small">
+        <li>The lock is set per phone and isn't included in backups. Restoring a backup on a new phone opens without a lock until you turn it on there.</li>
+        <li>It locks the screen in front of your data. It doesn't encrypt what's stored on the phone, so keep your phone's own lock on as well.</li>
+        <li>Your phone may save a passkey called “LifeSync” in its password manager. Leave it there; deleting it means you'll need your recovery code.</li>
+      </ul></div>
+    </div>`;
+  }
+
+  // ------------------------------------------------------------ Sharing and invite-only access
+  function ShareScreen({ back, toast }) {
+    const url = location.origin + location.pathname.replace(/index\.html$/, "");
+    const inClaude = window.self !== window.top;
+    const invite = window.LSAccess && LSAccess.enabled();
+    const msg = `I'm using LifeSync to plan office days, travel and family time. Open ${url} on your phone${invite ? " and enter the access code I'll send you separately" : ""}. Then in Chrome tap ⋮ → Install app (iPhone: Safari → Share → Add to Home Screen). Your data stays on your own phone.`;
+    const copy = (t, what) => {
+      try { navigator.clipboard.writeText(t).then(() => toast(what + " copied"), () => toast("Select the text and copy it")); } catch (e) { toast("Select the text and copy it"); }
+    };
+    return html`<div class="page">
+      <button class="link back" onClick=${back}>${I.left}More</button>
+      <div class="page-head"><span class="eyebrow">Share</span><h1>Share LifeSync</h1></div>
+      ${inClaude ? html`<${Alert} tone="info"><p class="small">You're using the copy inside Claude. Share the installed app's address instead: <b>https://yekkala2008.github.io/lifesync/</b></p></${Alert}>` : null}
+      <div class="card"><h3>1. Send the link</h3>
+        <div class="recovery mono" style="font-size:14px">${inClaude ? "https://yekkala2008.github.io/lifesync/" : url}</div>
+        <div class="btn-row"><button class="btn" onClick=${() => copy(inClaude ? "https://yekkala2008.github.io/lifesync/" : url, "Link")}>Copy link</button><button class="btn" onClick=${() => copy(msg, "Message")}>Copy invite message</button></div>
+      </div>
+      <div class="card"><h3>2. Access code</h3>
+        ${invite
+          ? html`<p class="small"><span class="pill ok"><span class="glyph">✓</span>Invite-only is on</span></p><p class="small">New people must enter an access code before they can use or install LifeSync. Send the code separately from the link, for example in a different chat.</p>`
+          : html`<p class="small"><span class="pill warn"><span class="glyph">!</span>Invite-only is off</span></p><p class="small">Anyone with the link can use LifeSync. To require an access code, the owner adds a secret on GitHub (see <b>Help → Sharing LifeSync</b>).</p>`}
+      </div>
+      <div class="card"><h3>Good to know</h3><ul class="why small">
+        <li>Everyone gets their own empty LifeSync. Your plans, trips and logs stay on your phone and are never shared.</li>
+        <li>They set their own office and home cities, rules and family dates.</li>
+        <li>The access code keeps casual visitors out, but it's not bank-grade security. Don't rely on it to protect secrets.</li>
+      </ul></div>
+    </div>`;
+  }
+
+  function AccessGate({ onIn }) {
+    const [code, setCode] = useState("");
+    const [err, setErr] = useState("");
+    const [busy, setBusy] = useState(false);
+    const submit = async (e) => {
+      e && e.preventDefault();
+      setBusy(true); setErr("");
+      if (await LSAccess.tryCode(code)) onIn();
+      else setErr("That code isn't valid. Check it with the person who invited you.");
+      setBusy(false);
+    };
+    return html`<div class="lock-screen" role="dialog" aria-modal="true" aria-label="Enter access code">
+      <form class="lock-inner" onSubmit=${submit}>
+        <div class="brand" style="font-size:22px"><${BrandMark} />LifeSync</div>
+        <div class="lock-icon" aria-hidden="true">${I.lock}</div>
+        <h1 style="font-size:22px">Invite only</h1>
+        <p class="small muted">Plan office days, travel and family time between two cities. Enter the access code you were given to start.</p>
+        <input id="ac-code" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Access code" value=${code} onInput=${(e) => setCode(e.target.value)} aria-label="Access code" style="text-align:center;font-size:17px" />
+        <button class="btn primary block lock-btn" type="submit" disabled=${busy || code.trim().length < 4}>${busy ? "Checking…" : "Continue"}</button>
+        ${err ? html`<p class="small" style="color:var(--bad)" role="alert">${err}</p>` : null}
+        <p class="tiny muted">You only need to do this once on this phone. After that, install it: Chrome ⋮ → Install app, or Safari → Share → Add to Home Screen.</p>
+        <div style="margin-top:22px"><${Signature} compact /></div>
+      </form>
+    </div>`;
+  }
+
   // ------------------------------------------------------------ Help window
   function HelpWindow({ section, onClose }) {
     const H = window.LSHelp || { sections: [], whatsNew: [] };
@@ -1288,6 +1523,7 @@
           ${H.whatsNew.map((w) => html`<div class="stack" style="gap:4px"><span class="eyebrow">Version ${w.version}</span>
             <ul class="why small">${w.items.map((t) => html`<li dangerouslySetInnerHTML=${{ __html: places(t) }}></li>`)}</ul></div>`)}
         </div>` : null}
+        <div class="credit-card"><${Signature} compact /></div>
         <p class="tiny muted">Guide updated ${H.updated ? fDay(H.updated) : ""}. LifeSync keeps your data on this device.</p>
       </div>
     </div>`;
@@ -1303,11 +1539,14 @@
       ["items", I.items, "Holidays & leave", `${(state.calendar || []).filter((i) => (i.end || i.start) >= today).length} upcoming`],
       ["reports", I.report, "Reports", "PDF for any month"],
       ["data", I.data, "Backup & data", "Save, restore, reset"],
+      ["lock", I.lock, "App lock", (window.LSLock && LSLock.read()) ? "On · phone unlock" : "Off"],
       ["help", I.help, "Help", "How to use LifeSync"],
+      ["share", I.share, "Share LifeSync", "Invite someone to use it"],
     ];
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">More</span><h1>Settings & tools</h1></div>
       <div class="more-grid">${tiles.map(([k, icon, t, sub]) => html`<button class="tile" onClick=${() => go("more", k)}>${icon}<strong>${t}</strong><span class="tiny muted">${sub}</span></button>`)}</div>
+      <div class="credit-card"><${Signature} /><span class="tiny muted">LifeSync · version ${(window.LSHelp && LSHelp.version) || ""}</span></div>
     </div>`;
   }
 
@@ -1350,6 +1589,7 @@
         <${Field} label="Where are you at the start of this month?" id="s-start"><select id="s-start" value=${start} onChange=${(e) => setStart(e.target.value)}><option value="HYD">${CITY.HYD}</option><option value="BLR">${CITY.BLR}</option></select></${Field}>
         <button class="btn primary block" onClick=${finish}>Save and start</button>
       </div>
+      <div class="credit-card"><${Signature} /></div>
       <div class="card"><h3>Just looking?</h3><p class="small muted">Load a sample month with example rules, a holiday, your daughter's dates and a booked train, all clearly marked so you can remove them later.</p>
         <button class="btn block" onClick=${() => onDone(exampleState(today), true)}>Explore with example data</button></div>
     </div>`;
@@ -1366,6 +1606,24 @@
     const [planAuto, setPlanAuto] = useState(false);
     const [calMonth, setCalMonth] = useState(ymOf(todayISO()));
     const [sheet, setSheet] = useState(null);
+    const [accessOk, setAccessOk] = useState(() => !(window.LSAccess && LSAccess.needed()));
+    const [lockCfg, setLockCfg] = useState(() => (window.LSLock && window.self === window.top ? LSLock.read() : null));
+    const [locked, setLocked] = useState(() => !!(window.LSLock && window.self === window.top && LSLock.read()));
+    const [hiddenCover, setHiddenCover] = useState(false);
+    const hiddenAt = useRef(0);
+    useEffect(() => {
+      const onVis = () => {
+        if (document.visibilityState === "hidden") {
+          hiddenAt.current = Date.now();
+          if (lockCfg) setHiddenCover(true); // keep the app switcher preview blank
+        } else {
+          setHiddenCover(false);
+          if (lockCfg && Date.now() - hiddenAt.current >= (lockCfg.relockAfter || 0) * 1000) setLocked(true);
+        }
+      };
+      document.addEventListener("visibilitychange", onVis);
+      return () => document.removeEventListener("visibilitychange", onVis);
+    }, [lockCfg]);
     const [help, setHelp] = useState(null); // null = closed, "" = open at top, "<id>" = open at section
     const openHelp = (id) => setHelp(id || "");
     const [toastMsg, setToastMsg] = useState("");
@@ -1473,6 +1731,9 @@
       setTab("today");
     };
 
+    if (!accessOk) return html`<${AccessGate} onIn=${() => setAccessOk(true)} />`;
+    if (locked && lockCfg)
+      return html`<${LockScreen} cfg=${lockCfg} onUnlocked=${() => setLocked(false)} onRecovered=${() => { LSLock.disable(); setLockCfg(null); setLocked(false); setTimeout(() => toast("App lock turned off. Turn it on again in More → App lock."), 300); }} />`;
     if (state) setPlaces(state.prefs);
     if (!state) return html`<div class="app"><div class="loading"><div class="spinner" aria-hidden="true"></div><span>Opening LifeSync…</span></div></div>`;
 
@@ -1487,7 +1748,7 @@
     let body;
     if (!state.meta.setupDone) body = html`<${Setup} today=${today} onDone=${finishSetup} openHelp=${openHelp} />`;
     else if (tab === "today") body = html`<${Today} state=${state} today=${today} go=${go} openJourney=${openJourney} setAttendance=${setAttendance} openDay=${openDay} openConfirm=${openConfirm} />`;
-    else if (tab === "plan") body = html`<${PlanScreen} state=${state} today=${today} month=${planMonth} setMonth=${setPlanMonth} acceptPlan=${acceptPlan} go=${go} autoRun=${planAuto} clearAutoRun=${() => setPlanAuto(false)} openHelp=${openHelp} />`;
+    else if (tab === "plan") body = html`<${PlanScreen} state=${state} today=${today} month=${planMonth} setMonth=${setPlanMonth} acceptPlan=${acceptPlan} go=${go} autoRun=${planAuto} clearAutoRun=${() => setPlanAuto(false)} openHelp=${openHelp} setCityWfh=${(ym, n) => { const m = Object.assign({}, state.prefs.officeCityWfh); if (n == null) delete m[ym]; else m[ym] = n; update("prefs", Object.assign({}, state.prefs, { officeCityWfh: m })); }} />`;
     else if (tab === "calendar") body = html`<${CalendarScreen} state=${state} today=${today} month=${calMonth} setMonth=${setCalMonth} openDay=${openDay} />`;
     else if (tab === "travel") body = html`<${TravelScreen} state=${state} today=${today} openJourney=${openJourney} newJourney=${() => setSheet({ type: "journey", item: null })} openHelp=${openHelp} />`;
     else if (sub === "compliance") body = html`<${ComplianceScreen} state=${state} today=${today} back=${back} />`;
@@ -1495,6 +1756,8 @@
     else if (sub === "rules") body = html`<${RulesScreen} state=${state} update=${update} back=${back} toast=${toast} editPolicy=${(p) => setSheet({ type: "policy", item: p })} openHelp=${openHelp} />`;
     else if (sub === "items") body = html`<${ItemsScreen} state=${state} today=${today} back=${back} edit=${(i) => setSheet({ type: "item", item: i })} openHelp=${openHelp} />`;
     else if (sub === "reports") body = html`<${ReportsScreen} state=${state} today=${today} back=${back} toast=${toast} />`;
+    else if (sub === "share") body = html`<${ShareScreen} back=${back} toast=${toast} />`;
+    else if (sub === "lock") body = html`<${AppLockScreen} back=${back} lockCfg=${lockCfg} setLockCfg=${setLockCfg} toast=${toast} userName=${state.prefs.name} />`;
     else if (sub === "data") body = html`<${DataScreen} state=${state} replaceState=${replaceState} back=${back} toast=${toast} storeLabel=${store ? store.label : ""} />`;
     else body = html`<${MoreScreen} go=${go} state=${state} today=${today} />`;
 
@@ -1526,6 +1789,7 @@
       ${sheetEl}
       ${help !== null ? html`<${HelpWindow} section=${help} onClose=${() => setHelp(null)} />` : null}
       ${toastMsg ? html`<div class="toast" role="status">${toastMsg}</div>` : null}
+      ${hiddenCover ? html`<div class="privacy-cover" aria-hidden="true"></div>` : null}
     </div>`;
   }
 

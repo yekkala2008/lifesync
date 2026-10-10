@@ -73,6 +73,15 @@
     weeklyBase: 5, // working days in a normal week, used to prorate
   };
 
+  /** Work-from-home days wanted in the office city for a month: that month's
+   *  own number if set, otherwise the usual number from Rules. */
+  function officeCityWfhFor(state, ym) {
+    const p = (state && state.prefs) || {};
+    const m = (p.officeCityWfh || {})[ym];
+    if (m != null && m !== "") return Math.max(0, Number(m) || 0);
+    return Math.max(0, Number(p.officeCityWfhDefault) || 0);
+  }
+
   function placeNames(state) {
     const p = (state && state.prefs) || {};
     return {
@@ -288,8 +297,8 @@
 
   const PROFILES = {
     balanced: { label: "Balanced", weights: {} },
+    home: { label: "Most home time", weights: { trips: 6, homeWeekend: 14, homeWeekday: 8 } },
     fewerTrips: { label: "Fewest trips", weights: { trips: 30, midweekTravel: 4 } },
-    family: { label: "Most family time", weights: { trips: 6, daughter: 10, homeWeekend: 10, homeWeekday: 5 } },
   };
 
   function familyOn(state, iso, loc) {
@@ -396,17 +405,24 @@
     const SCAP = Math.max(1, prefs.minStayNights);
 
     const startLoc = opts.startLocation || prefs.startLocation;
-    // state key: loc, month office count, week office count, nights in BLR (capped)
-    const key = (l, m, wc, s) => ((l * (MCAP + 1) + m) * (WCAP + 1) + wc) * (SCAP + 1) + s;
+    // Work-from-home days wanted in the office city this month (planning input).
+    const wanted = opts.officeCityWfh != null ? opts.officeCityWfh : officeCityWfhFor(state, ym);
+    const hNeed = Math.max(0, Math.floor(Number(wanted || 0)) || 0);
+    const HCAP = hNeed;
+    const isCityWfh = (i, loc, office) => loc === "BLR" && !office && days[i].workday && !days[i].business;
+    // state key: loc, month office count, week office count, nights in BLR (capped), office-city WFH days (capped)
+    const key = (l, m, wc, s, h) => (((l * (MCAP + 1) + m) * (WCAP + 1) + wc) * (SCAP + 1) + s) * (HCAP + 1) + h;
     const decode = (kk) => {
+      const h = kk % (HCAP + 1);
+      kk = (kk - h) / (HCAP + 1);
       const s = kk % (SCAP + 1);
       kk = (kk - s) / (SCAP + 1);
       const wc = kk % (WCAP + 1);
       kk = (kk - wc) / (WCAP + 1);
       const m = kk % (MCAP + 1);
-      return { l: (kk - m) / (MCAP + 1), m, wc, s };
+      return { l: (kk - m) / (MCAP + 1), m, wc, s, h };
     };
-    const SIZE = 2 * (MCAP + 1) * (WCAP + 1) * (SCAP + 1);
+    const SIZE = 2 * (MCAP + 1) * (WCAP + 1) * (SCAP + 1) * (HCAP + 1);
 
     function dayScore(i, loc, office) {
       const d = days[i];
@@ -454,7 +470,7 @@
     // Virtual "day -1": you are at startLoc. A BLR start counts as a settled stay.
     let cur = new Float64Array(SIZE).fill(Infinity);
     const L0 = LOCS.indexOf(startLoc);
-    cur[key(L0, 0, 0, L0 === 0 ? SCAP : 0)] = 0;
+    cur[key(L0, 0, 0, L0 === 0 ? SCAP : 0, 0)] = 0;
     const backs = [];
     for (let i = 0; i < N; i++) {
       const nxt = new Float64Array(SIZE).fill(Infinity);
@@ -466,7 +482,7 @@
       for (let k = 0; k < SIZE; k++) {
         const c0 = cur[k];
         if (c0 === Infinity) continue;
-        const { l, m, wc, s } = decode(k);
+        const { l, m, wc, s, h } = decode(k);
         if (i > 0 && !weekOK(i - 1, wc)) continue;
         const wcBase = newWeek ? 0 : wc;
         for (let l2 = 0; l2 < 2; l2++) {
@@ -486,8 +502,9 @@
             if (!officeOK(i, LOCS[l2], office)) continue;
             const m2 = Math.min(MCAP, m + o);
             const wc2 = Math.min(WCAP, wcBase + o);
+            const h2 = Math.min(HCAP, h + (isCityWfh(i, LOCS[l2], office) ? 1 : 0));
             const c = c0 + tc + dayScore(i, LOCS[l2], office);
-            const k2 = key(l2, m2, wc2, s2);
+            const k2 = key(l2, m2, wc2, s2, h2);
             if (c < nxt[k2]) {
               nxt[k2] = c;
               bk[k2] = k;
@@ -504,14 +521,20 @@
     let bestK = -1;
     for (let k = 0; k < SIZE; k++) {
       if (cur[k] >= best) continue;
-      const { l, m, wc } = decode(k);
-      if (m < monthReq || !weekOK(N - 1, wc)) continue;
+      const { l, m, wc, h } = decode(k);
+      if (m < monthReq || !weekOK(N - 1, wc) || h < hNeed) continue;
       if (prefs.endLocation && LOCS[l] !== prefs.endLocation) continue;
       best = cur[k];
       bestK = k;
     }
     if (bestK < 0) {
       const issues = diagnose(ym, state, opts).concat(forcedConflicts);
+      if (hNeed && !issues.length) {
+        const open = days.filter((d, i) => d.workday && !d.business && (!opts.today || d.date >= opts.today || (fixed[d.date] && fixed[d.date].location === "BLR" && !fixed[d.date].office))).length;
+        issues.push({
+          text: `${hNeed} work-from-home ${hNeed === 1 ? "day" : "days"} in ${placeNames(state).office} won't fit alongside ${monthReq} office days: only ${open} working days are left this month. Lower the number and plan again.`,
+        });
+      }
       if (!issues.length)
         issues.push({
           text: "No schedule meets every hard rule together with your fixed journeys and must-attend events. Relax one of them and plan again.",
@@ -551,6 +574,7 @@
       requirements: req,
       cost: best,
       weights: w,
+      officeCityWfhWanted: hNeed,
       warnings,
       weekNeed,
       today: opts.today || null,
@@ -570,6 +594,7 @@
     const hol = plan.days.filter((d) => d.mode === "holiday" && !isWeekend(d.date));
     const holidaysHome = hol.filter((d) => d.location === "HYD").length;
     const closedDays = plan.days.filter((d) => d.mode === "closed");
+    const cityWfh = plan.days.filter((d) => d.location === "BLR" && (d.mode === "wfh" || d.mode === "closed")).length;
     const closedHome = closedDays.filter((d) => d.location === "HYD").length;
     const cost = (state.prefs && state.prefs.tripCost) || 0;
     return {
@@ -580,6 +605,7 @@
       hydDays,
       weekdayHolidays: hol.length,
       closedDays: closedDays.length,
+      cityWfh,
       closedHome,
       holidaysHome,
       hydWeekends,
@@ -603,6 +629,7 @@
         today: opts.today,
         pinTrips: opts.pinTrips,
         noTravel: opts.noTravel,
+        officeCityWfh: opts.officeCityWfh,
       });
       if (!p.feasible) {
         infeasible = p;
@@ -650,6 +677,11 @@
           : `Some weeks fall short of the weekly minimum.`
       );
     }
+    if (plan.officeCityWfhWanted || m.cityWfh)
+      lines.push(
+        `${m.cityWfh} work-from-home ${m.cityWfh === 1 ? "day" : "days"} in ${N.office}` +
+          (plan.officeCityWfhWanted ? (m.cityWfh === plan.officeCityWfhWanted ? ` (you asked for ${plan.officeCityWfhWanted}).` : ` (you asked for at least ${plan.officeCityWfhWanted}).`) : ".")
+      );
     lines.push(`${m.trips} one-way ${m.trips === 1 ? "journey" : "journeys"}.`);
     if (m.daughterWindow)
       lines.push(`In ${N.office} for ${m.daughterDays} of ${m.daughterWindow} days your daughter is available.`);
@@ -774,6 +806,7 @@
       family: (state.family || []).filter((f) => touches(f.start, f.end)).map((f) => [f.person, f.start, f.end, f.status, f.location]),
       journeys: (state.journeys || []).filter((j) => (["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled")) && !planTrips.has(`${j.date}|${j.from}|${j.to}`)).map((j) => [j.date, j.from, j.to, j.status, !!j.locked]),
       counting: state.counting || {},
+      officeCityWfh: officeCityWfhFor(state, ym),
       prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome, state.prefs.closedDaysAtHome] : null,
     };
     const str = JSON.stringify(pick);
@@ -817,6 +850,6 @@
     // travel
     STATUSES, journeyState, reminders,
     // replanning
-    inputsFingerprint, diffPlans, placeNames,
+    inputsFingerprint, diffPlans, placeNames, officeCityWfhFor,
   };
 });

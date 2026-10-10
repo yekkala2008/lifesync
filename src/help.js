@@ -13,10 +13,31 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.6.0",
-    updated: "2026-10-09",
+    version: "0.9.0",
+    updated: "2026-10-10",
 
     whatsNew: [
+      {
+        version: "0.9.0",
+        items: [
+          "Set your <b>usual work-from-home days in Bengaluru</b> per month in Rules &amp; preferences; change any single month on the Plan screen.",
+          "<b>Share LifeSync</b> (in More) with a ready-made invite message. The owner can make it invite-only with an access code.",
+          "Signed: designed &amp; built by Srinivas Yekkala.",
+        ],
+      },
+      {
+        version: "0.8.0",
+        items: [
+          "Set <b>Work from home in Bengaluru</b> on the Plan screen. Every option plans those days on top of your office days.",
+          "Plan options are now <b>Balanced</b> (always first, recommended), <b>Most home time</b> and <b>Fewest trips</b>.",
+        ],
+      },
+      {
+        version: "0.7.0",
+        items: [
+          "<b>App lock</b>: open LifeSync with your phone's fingerprint, face, PIN or pattern. Turn it on in <b>More → App lock</b>.",
+        ],
+      },
       {
         version: "0.6.0",
         items: [
@@ -143,15 +164,18 @@
         id: "plan",
         title: "Making a plan",
         body: `
-<p>In <b>Plan</b>, pick the month and tap <b>Suggest plans</b>. You get up to three options:</p>
+<p>In <b>Plan</b>, pick the month. If you'd like to stay in Bengaluru on some days without going to the office, set <b>Work from home in Bengaluru</b> with <b>−</b> and <b>+</b>. Then tap <b>Suggest plans</b>. You get up to three options, always in this order:</p>
 <ul>
-<li><b>Balanced</b>: the recommended mix.</li>
+<li><b>Balanced</b>: the recommended mix of office, home time, family and trips.</li>
+<li><b>Most home time</b>: as many days in Hyderabad as your rules allow.</li>
 <li><b>Fewest trips</b>: longer stays, fewer journeys.</li>
-<li><b>Most family time</b>: more weekends at home and more days with your daughter.</li>
 </ul>
+<p>Every option plans your office days <b>and</b> at least the work-from-home days you set. If they can't both fit, you're told how many working days are left so you can lower the number. Options that come out identical are shown once.</p>
 <p>Each option shows a strip of the month (green Bengaluru, ochre Hyderabad, dot = office day), the key numbers, its <b>Suggested travel</b> and a short explanation. Tap an option to select it, then <b>Use … plan</b>, check the summary and <b>Save plan</b>.</p>
 <p><b>Every trip is overnight.</b> <i>Tue 20 Oct · evening → arrive Wed 21</i> means you leave Tuesday evening and arrive Wednesday morning.</p>
 <p>Office rules always come first. If they can't all be met, the app lists which rules clash instead of guessing.</p>
+<p>Set your <b>usual</b> number once in <b>More → Rules &amp; preferences → Work from home in Bengaluru</b>. Every month starts from it. Changing the number on the Plan screen applies to that month only; tap <b>Use usual</b> to go back.</p>
+<p>The number is saved per month. Changing it after saving a plan shows <b>Your plan may be out of date</b>, with an updated plan to review.</p>
 <p class="tip">To change how options are balanced, move the sliders in <b>Rules &amp; preferences → Planning priorities</b>.</p>`,
       },
       {
@@ -217,6 +241,36 @@
 <p><b>Install:</b> open the app's address in Chrome → <b>⋮ → Install app</b> (iPhone: Safari → Share → <b>Add to Home Screen</b>).</p>
 <p><b>Updates:</b> close and reopen LifeSync while online to get the latest version. Your data isn't affected.</p>
 <p class="tip">Uninstalling the app or clearing Chrome's site data deletes your LifeSync data. Save a backup first.</p>`,
+      },
+      {
+        id: "lock",
+        title: "App lock",
+        body: `
+<p>App lock asks for your phone's own screen lock (fingerprint, face, PIN or pattern) whenever LifeSync opens.</p>
+<ol>
+<li>Open LifeSync from its home-screen icon.</li>
+<li>Go to <b>More → App lock</b> and tap <b>Turn on App lock</b>.</li>
+<li>Confirm with your fingerprint, face, PIN or pattern.</li>
+<li>Save the <b>recovery code</b> it shows you somewhere outside LifeSync. It's shown only once.</li>
+</ol>
+<p>Choose when it locks again under <b>Lock again when I leave the app</b>: immediately, or after 1, 5 or 15 minutes away.</p>
+<p><b>Can't unlock?</b> On the lock screen tap <b>Can't unlock?</b> and enter your recovery code. LifeSync opens and the lock is turned off; turn it on again in More → App lock.</p>
+<p>To turn it off, go to <b>More → App lock → Turn off App lock</b>. It asks you to unlock first.</p>
+<p class="tip">Your phone does the check and LifeSync never sees your fingerprint or PIN. The lock is set per phone and isn't part of backups. App lock works in the installed app, not when LifeSync is opened inside Claude.</p>`,
+      },
+      {
+        id: "share",
+        title: "Sharing LifeSync",
+        body: `
+<p>Open <b>More → Share LifeSync</b> to copy the link or a ready-made invite message. Everyone who opens it gets their own empty LifeSync; your data never leaves your phone.</p>
+<p><b>Making it invite-only (owner):</b></p>
+<ol>
+<li>On GitHub, open the <b>lifesync</b> repository → <b>Settings → Secrets and variables → Actions</b>.</li>
+<li>Tap <b>New repository secret</b>. Name: <b>LIFESYNC_ACCESS_CODES</b>. Value: one or more codes separated by commas, such as <i>blue-mango-2026, team-kite-81</i>. Use 8 characters or more.</li>
+<li>Go to <b>Actions → Test and publish LifeSync → Run workflow</b>.</li>
+</ol>
+<p>From then on, new people see an <b>Invite only</b> screen and enter a code once per phone. You keep using it as normal on phones that already have access. To stop a code working, remove it from the secret and run the workflow again; phones that used it are asked for a new code.</p>
+<p class="tip">Send the code separately from the link. The code keeps casual visitors out, but it isn't strong security: someone technical could get around it. For a real lock, ask about Cloudflare Access.</p>`,
       },
       {
         id: "faq",

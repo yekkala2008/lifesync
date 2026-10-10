@@ -2,14 +2,30 @@
 //   dist/pages/         installable app (PWA) for GitHub Pages or any static host; works offline
 //   dist/lifesync.html  single-file version published as a Claude artifact
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const VERSION = JSON.parse(read("./package.json")).version;
+// Signature font (Monoton, SIL Open Font License) is bundled so it works offline.
+const sigFont = readFileSync(new URL("./node_modules/@fontsource/monoton/files/monoton-latin-400-normal.woff2", import.meta.url));
+const sigFace = (src) => `@font-face { font-family: "Monoton"; font-style: normal; font-weight: 400; font-display: swap; src: url(${src}) format("woff2"); }\n`;
 const css = read("./src/styles.css");
 const engine = read("./src/engine.js");
 const store = read("./src/store.js");
 const app = read("./src/app.js");
 const help = read("./src/help.js");
+const lock = read("./src/lock.js");
+const access = read("./src/access.js");
+
+// Invite-only codes come from the environment (a GitHub Actions secret). Only
+// salted hashes are written into the app; the codes themselves never are.
+const codes = (process.env.LIFESYNC_ACCESS_CODES || "").split(",").map((c) => c.trim().toLowerCase().replace(/\s+/g, "")).filter(Boolean);
+const short = codes.filter((c) => c.length < 8);
+if (short.length) console.warn(`Warning: ${short.length} access code(s) are shorter than 8 characters and easy to guess.`);
+// Fixed salt: hashes stay the same across builds, so updates don't ask people
+// for their code again. Removing a code from the secret is what revokes it.
+const salt = process.env.LIFESYNC_ACCESS_SALT || "lifesync-invite-v1";
+const accessConfig = `window.LSAccessConfig = ${JSON.stringify({ salt: codes.length ? salt : "", hashes: codes.map((c) => createHash("sha256").update(salt + ":" + c).digest("hex")) })};\n`;
 
 // Guard: the in-app help must be updated with every release.
 const helpVersion = (help.match(/version:\s*"([^"]+)"/) || [])[1];
@@ -37,7 +53,7 @@ const artifact = `<title>LifeSync</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">
 <style>
-${css}
+${sigFace("data:font/woff2;base64," + sigFont.toString("base64"))}${css}
 </style>
 <div id="app"></div>
 <script src="${CDN.htm}"></script>
@@ -50,6 +66,12 @@ ${store}
 </script>
 <script>
 ${help}
+</script>
+<script>
+${lock}
+</script>
+<script>
+${access}
 </script>
 <script>
 ${app}
@@ -87,6 +109,9 @@ const page = `<!doctype html>
 <script src="engine.js?v=${VERSION}"></script>
 <script src="store.js?v=${VERSION}"></script>
 <script src="help.js?v=${VERSION}"></script>
+<script src="lock.js?v=${VERSION}"></script>
+<script src="access-config.js?v=${VERSION}"></script>
+<script src="access.js?v=${VERSION}"></script>
 <script src="app.js?v=${VERSION}"></script>
 <script>
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
@@ -96,11 +121,15 @@ if ("serviceWorker" in navigator) addEventListener("load", () => navigator.servi
 `;
 const out = (p, s) => writeFileSync(new URL("./dist/pages/" + p, import.meta.url), s);
 out("index.html", page);
-out("styles.css", css);
+out("styles.css", sigFace("vendor/monoton.woff2") + css);
+writeFileSync(new URL("./dist/pages/vendor/monoton.woff2", import.meta.url), sigFont);
 out("engine.js", engine);
 out("store.js", store);
 out("app.js", app);
 out("help.js", help);
+out("lock.js", lock);
+out("access.js", access);
+out("access-config.js", accessConfig);
 out("icon.svg", icon);
 copyFileSync(new URL("./node_modules/htm/preact/standalone.umd.js", import.meta.url), new URL("./dist/pages/vendor/htm-preact.js", import.meta.url));
 copyFileSync(new URL("./node_modules/jspdf/dist/jspdf.umd.min.js", import.meta.url), new URL("./dist/pages/vendor/jspdf.umd.min.js", import.meta.url));
@@ -129,7 +158,7 @@ out(
     2
   )
 );
-const files = ["./", "index.html", "styles.css", "engine.js", "store.js", "help.js", "app.js", "vendor/htm-preact.js", "vendor/jspdf.umd.min.js", "manifest.webmanifest", "icon.svg", "icon-192.png"];
+const files = ["./", "index.html", "styles.css", "engine.js", "store.js", "help.js", "lock.js", "access-config.js", "access.js", "app.js", "vendor/htm-preact.js", "vendor/monoton.woff2", "vendor/jspdf.umd.min.js", "manifest.webmanifest", "icon.svg", "icon-192.png"];
 out(
   "sw.js",
   `// LifeSync offline cache. Bump the version (package.json) to ship an update.
@@ -150,4 +179,4 @@ self.addEventListener("fetch", (e) => {
 `
 );
 out(".nojekyll", "");
-console.log("Built dist/lifesync.html and dist/pages/ (v" + VERSION + ")");
+console.log("Built dist/lifesync.html and dist/pages/ (v" + VERSION + ")" + (codes.length ? ` · invite-only with ${codes.length} access code(s)` : " · open to anyone with the link"));

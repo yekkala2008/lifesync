@@ -23,6 +23,14 @@ LifeSync then opens full-screen from its icon and works offline.
 
 Edit files in `src/`, **update the in-app help in `src/help.js`** (affected sections plus a `whatsNew` entry), bump `version` in both `package.json` and `src/help.js` (this also refreshes the offline cache), commit and push. The build fails if the help version doesn't match, so stale help can't be published. See `CLAUDE.md`. The workflow redeploys; the installed app picks up the new version the next time it opens with a connection.
 
+## Sharing it with other people
+
+Send them the link. Everyone gets their own empty LifeSync, and each person's data stays on their own phone.
+
+**Invite-only:** in the GitHub repo go to Settings → Secrets and variables → Actions → New repository secret. Name it `LIFESYNC_ACCESS_CODES` and set the value to one or more codes separated by commas (8+ characters each). Then run the workflow again. New phones must enter a code once; only salted hashes of the codes are published. Remove a code and republish to revoke it.
+
+This keeps casual visitors out but isn't strong security: the site and its code are public, so someone technical could get past it. For a real lock, host it on Cloudflare Pages behind Cloudflare Access (free for small groups, sign-in by email code).
+
 ## Run it on your computer
 
 ```bash
@@ -41,6 +49,8 @@ Works the same on Windows. No Docker needed, but `docker run --rm -p 8080:80 -v 
 | `src/engine.js` | All planning and compliance logic. Pure functions, no UI, unit-tested. |
 | `src/store.js` | Saving: browser storage on the phone, or your Claude account when opened as a Claude artifact. |
 | `src/app.js` | The screens (Preact + htm, no build step). |
+| `src/lock.js` | App lock: a device passkey (WebAuthn) so the phone's fingerprint/face/PIN opens the app. Local gate, not encryption; per device; recovery code stored as a hash. |
+| `src/access.js` | Invite-only gate (access code checked against hashes from the build). |
 | `src/help.js` | The in-app Help guide (tap **?**). Updated with every functional change. |
 | `src/styles.css` | Colours, type and layout. Bengaluru is green, Hyderabad is ochre throughout. |
 | `test/engine.test.js` | Tests for rules, date boundaries, replanning and compliance (`node --test`). |
@@ -54,7 +64,7 @@ The planner looks at every day of the month and decides where you are (Bengaluru
 
 **Preferences (weighted, adjustable in Rules → Planning priorities):** fewer trips, time with your daughter when she's free in Bengaluru, weekends and weekdays at home, avoiding very short stays, travelling on preferred days.
 
-It produces three plans (Balanced, Fewest trips, Most family time), drops duplicates, lists each plan's suggested travel dates with a book-by date (every trip is overnight: leave in the evening, arrive next morning), explains each, and asks you to choose when they really differ. Tap any suggested trip to move it to another evening, keep it, or skip travel that evening; the month re-plans around your change, or explains which rule it would break. Trips you set are saved as "Your date" and stay fixed in later replans. Nothing is saved, booked or cancelled until you confirm.
+Before planning you can set how many days to work from home in the office city that month; every option plans at least that many on top of the office days. It produces up to three plans, always in this order: Balanced (recommended), Most home time, Fewest trips. It drops duplicates, lists each plan's suggested travel dates with a book-by date (every trip is overnight: leave in the evening, arrive next morning), explains each, and asks you to choose when they really differ. Tap any suggested trip to move it to another evening, keep it, or skip travel that evening; the month re-plans around your change, or explains which rule it would break. Trips you set are saved as "Your date" and stay fixed in later replans. Nothing is saved, booked or cancelled until you confirm.
 
 Mid-month, days already past stay as they were. Only days you **log** as Office count as completed; a planned day never counts. In the office city you can log Office or Home on any day; days in the home city are logged as Home automatically. If working from home leaves you short, Today offers an updated plan. Actual totals show as they are, above or below the target.
 
@@ -82,3 +92,6 @@ These are settings, not assumptions baked into code (**More → Rules & preferen
 - Align the look and navigation with Namiclad.
 - Optional Google Calendar sync for holidays, leave and your daughter's shared calendar (with permission).
 - Optional cloud sync.
+
+
+The signature uses the Monoton typeface by Vernon Adams, under the SIL Open Font License, bundled from @fontsource/monoton.

@@ -341,3 +341,30 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .confirm-seg button { min-height: 34px; }
 .places { display: grid; gap: 14px; }
 .actuals { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+
+/* app lock */
+.lock-screen { position: fixed; inset: 0; z-index: 90; background: var(--paper); display: flex; align-items: center; justify-content: center; padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
+.lock-inner { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.lock-icon { width: 72px; height: 72px; border-radius: 22px; display: grid; place-items: center; background: var(--blr-soft); color: var(--blr); margin-top: 18px; }
+.lock-icon svg { width: 36px; height: 36px; }
+.lock-btn { min-height: 52px; font-size: 16px; }
+.lock-btn svg { width: 22px; height: 22px; }
+.recovery { font-size: 20px; font-weight: 700; letter-spacing: 0.06em; padding: 14px; border-radius: var(--r-sm); background: var(--sunk); text-align: center; user-select: all; -webkit-user-select: all; word-break: break-all; }
+.privacy-cover { position: fixed; inset: 0; z-index: 95; background: var(--paper); }
+.stepper { display: flex; align-items: center; gap: 10px; }
+.stepper .icon-btn { width: 44px; height: 44px; font-size: 22px; font-weight: 600; }
+.stepper input { width: 72px; text-align: center; font-family: var(--f-mono); font-size: 18px; font-weight: 700; }
+
+/* signature */
+.signature { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.sig-by { font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.sig-name { font-family: "Monoton", "Bricolage Grotesque", system-ui, sans-serif; font-weight: 400; font-size: clamp(26px, 9vw, 38px); line-height: 1.05; letter-spacing: 0.02em;
+  background: linear-gradient(100deg, var(--blr) 0%, var(--accent) 50%, var(--hyd) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; padding: 2px 4px; }
+.sig-name span { display: inline-block; }
+.signature.compact .sig-name { font-size: clamp(20px, 6.5vw, 26px); }
+.credit-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 8px 6px; }
+@media (prefers-reduced-motion: no-preference) {
+  .sig-name { background-size: 200% 100%; animation: sig 9s ease-in-out infinite alternate; }
+  @keyframes sig { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+}
+.tiny-link { font-size: 11.5px; }

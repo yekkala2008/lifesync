@@ -432,3 +432,54 @@ test("working from home on a planned office day lowers the actual count and the 
   assert.equal(over.monthly.completed, 5); // more than required shows as it is
   assert.equal(over.monthly.status, "met");
 });
+
+test("plans the requested work-from-home days in the office city, in every option", () => {
+  const s = base({ policies: [{ type: "monthlyMin", value: 12 }] });
+  s.prefs.officeCityWfh = { "2026-11": 3 };
+  const r = E.proposePlans("2026-11", s);
+  assert.ok(r.feasible);
+  assert.equal(r.plans[0].profile, "balanced"); // Balanced always first
+  for (const p of r.plans) {
+    const blrWfh = p.days.filter((d) => d.location === "BLR" && d.mode === "wfh").length;
+    assert.ok(blrWfh >= 3, `${p.label}: ${blrWfh}`);
+    assert.equal(p.days.filter((d) => d.mode === "wfo").length, 12);
+    assert.ok(E.explain(p, s).some((t) => /work-from-home days? in Bengaluru \(you asked for (at least )?3\)/.test(t)));
+  }
+  assert.deepEqual(r.plans.map((p) => p.label).filter((l) => !["Balanced", "Most home time", "Fewest trips"].includes(l)), []);
+});
+
+test("changing the office-city WFH days marks the plan out of date, only for that month", () => {
+  const s = base({ policies: [{ type: "monthlyMin", value: 8 }] });
+  const fp = E.inputsFingerprint("2026-11", s);
+  s.prefs.officeCityWfh = { "2026-12": 2 };
+  assert.equal(E.inputsFingerprint("2026-11", s), fp);
+  s.prefs.officeCityWfh["2026-11"] = 2;
+  assert.notEqual(E.inputsFingerprint("2026-11", s), fp);
+});
+
+test("too many office-city WFH days is explained, not ignored", () => {
+  const s = base({ policies: [{ type: "monthlyMin", value: 15 }] });
+  const p = E.planMonth("2026-11", s, { officeCityWfh: 10 }); // 21 working days, 15 office
+  assert.equal(p.feasible, false);
+  assert.match(p.issues.map((i) => i.text).join(" "), /won't fit alongside 15 office days/);
+});
+
+test("options come in a fixed order: Balanced, Most home time, Fewest trips", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }] });
+  const order = ["balanced", "home", "fewerTrips"];
+  const got = E.proposePlans("2026-11", s).plans.map((p) => p.profile);
+  assert.equal(got[0], "balanced");
+  assert.deepEqual(got, order.filter((x) => got.includes(x)));
+});
+
+test("usual office-city WFH days apply to every month unless a month overrides them", () => {
+  const s = base({ policies: [{ type: "monthlyMin", value: 10 }] });
+  s.prefs.officeCityWfhDefault = 2;
+  assert.equal(E.officeCityWfhFor(s, "2026-11"), 2);
+  s.prefs.officeCityWfh = { "2026-11": 0, "2026-12": 4 };
+  assert.equal(E.officeCityWfhFor(s, "2026-11"), 0); // explicit 0 wins
+  assert.equal(E.officeCityWfhFor(s, "2026-12"), 4);
+  assert.equal(E.officeCityWfhFor(s, "2027-01"), 2);
+  const p = E.planMonth("2027-01", s);
+  assert.ok(p.days.filter((d) => d.location === "BLR" && d.mode === "wfh").length >= 2);
+});

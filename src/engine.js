@@ -801,10 +801,21 @@
     const monthEnd = monthDays(ym).slice(-1)[0];
     const touches = (s, e) => !(e && e < monthStart) && !(s > monthEnd);
     const pick = {
-      policies: (state.policies || []).map((p) => [p.type, p.value, p.weekdays, p.date, p.effectiveFrom, p.effectiveTo, p.active]),
+      // Only things that can change THIS month's plan count.
+      policies: (state.policies || [])
+        .filter((p) => touches(p.effectiveFrom || "0000-01-01", p.effectiveTo || "9999-12-31") && (p.type !== "requiredDate" || touches(p.date, p.date)))
+        .map((p) => [p.type, p.value, p.weekdays, p.date, p.effectiveFrom, p.effectiveTo, p.active]),
       calendar: (state.calendar || []).filter((c) => touches(c.start, c.end || c.start)).map((c) => [c.category, c.start, c.end, c.location, c.mustAttend]),
       family: (state.family || []).filter((f) => touches(f.start, f.end)).map((f) => [f.person, f.start, f.end, f.status, f.location]),
-      journeys: (state.journeys || []).filter((j) => (["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled")) && !planTrips.has(`${j.date}|${j.from}|${j.to}`)).map((j) => [j.date, j.from, j.to, j.status, !!j.locked]),
+      // Fixed trips in or just before this month that the plan doesn't already
+      // contain. Booked, waitlisted, completed and "your date" all pin you the
+      // same way, so moving between them is not a change.
+      journeys: (state.journeys || [])
+        .filter((j) => j.date >= addDays(monthStart, -1) && j.date <= monthEnd)
+        .filter((j) => ["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled"))
+        .filter((j) => !planTrips.has(`${j.date}|${j.from}|${j.to}`))
+        .map((j) => [j.date, j.from, j.to])
+        .sort((a, b) => a.join().localeCompare(b.join())),
       counting: state.counting || {},
       officeCityWfh: officeCityWfhFor(state, ym),
       prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome, state.prefs.closedDaysAtHome] : null,

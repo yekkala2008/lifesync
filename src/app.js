@@ -24,6 +24,7 @@
   const fDay = (iso) => fmt(iso, { weekday: "short", day: "numeric", month: "short" });
   const fLong = (iso) => fmt(iso, { weekday: "long", day: "numeric", month: "long" });
   const fMonth = (ym) => fmt(ym + "-01", { month: "long", year: "numeric" });
+  const prettyDates = (t) => String(t).replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (m) => fDay(m));
   const fMonthShort = (ym) => fmt(ym + "-01", { month: "long" });
   const uid = () => Math.random().toString(36).slice(2, 10);
   // Two place slots: "BLR" = office city, "HYD" = home city. The keys never change
@@ -414,7 +415,7 @@
 
     line("Outstanding actions", 13, "bold");
     if (!r.actions.length && !r.unlogged.length) line("Nothing outstanding.", 10, "normal", [86, 100, 92]);
-    r.actions.forEach((a) => line(`• ${fDay(a.journey.date)} ${CITY[a.journey.from]} > ${CITY[a.journey.to]}: ${a.text}`, 9.5));
+    r.actions.forEach((a) => line(`• ${fDay(a.journey.date)} ${CITY[a.journey.from]} > ${CITY[a.journey.to]}: ${prettyDates(a.text)}`, 9.5));
     if (r.unlogged.length) line(`• ${r.unlogged.length} planned office day(s) not yet logged: ${r.unlogged.map(fDay).join(", ")}`, 9.5);
     const pages = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pages; i++) {
@@ -429,6 +430,107 @@
   }
 
   // ------------------------------------------------------------ screens: Today
+  // ------------------------------------------------------------ Action items
+  // Everything that needs you, in priority order. Each item has one button that
+  // goes straight to the fix, and disappears once it's done.
+  function useOfficeOutlook(state, today) {
+    const ym = ymOf(today);
+    const key = E.inputsFingerprint(ym, state) + JSON.stringify(state.attendance || {}) + today;
+    return useMemo(() => {
+      const plan = acceptedPlan(state, ym);
+      const comp = E.compliance(ym, state, plan, today);
+      if (!plan || !comp.monthly.hasPolicy || comp.monthly.status !== "at-risk") return { comp, helps: false };
+      const best = E.planMonth(ym, state, { startLocation: startLocationFor(state, ym), fixedDays: fixedDaysFor(state, ym, today), today });
+      const bestTotal = best.feasible ? best.days.filter((d) => d.mode === "wfo").length : 0;
+      const workLeft = E.classifyMonth(ym, state).filter((d) => d.date >= today && d.workday && !d.noOffice).length;
+      return { comp, helps: bestTotal > comp.monthly.projected, bestTotal, workLeft };
+    }, [key]);
+  }
+
+  function buildActions({ state, today, outlook, lockAvail }) {
+    const out = [];
+    const add = (pri, item) => out.push(Object.assign({ pri }, item));
+    const ym = ymOf(today);
+    const lead = state.prefs.bookingLeadDays != null ? state.prefs.bookingLeadDays : 21;
+    const route = (j) => `${CITY[j.from]} → ${CITY[j.to]}`;
+    for (const j of state.journeys || []) {
+      if (["cancelled"].includes(j.status)) continue;
+      const st = E.journeyState(j, today, state.prefs);
+      const d = st.daysAway;
+      if (j.status === "completed") continue;
+      if (d < 0) {
+        add(6, { id: "close-" + j.id, tone: "neutral", title: `Did your ${fDay(j.date)} trip happen?`, detail: route(j) + ". Mark it completed or cancelled.", btn: "Update trip", act: { journey: j.id } });
+      } else if (j.status === "waitlisted") {
+        add(1, { id: "wl-" + j.id, tone: "bad", title: `Ticket not confirmed: ${fDay(j.date)}`, detail: route(j) + (j.ref ? ` · PNR ${j.ref}` : "") + ". Check its status or book a backup.", btn: "Open trip", act: { journey: j.id } });
+      } else if (j.status === "booked" && d <= 1) {
+        add(1, { id: "go-" + j.id, tone: "info", title: d === 0 ? `Travelling tonight${j.depTime ? " at " + j.depTime : ""}` : `Travelling tomorrow${j.depTime ? " at " + j.depTime : ""}`, detail: route(j) + (j.ref ? ` · PNR ${j.ref}` : ""), btn: "Trip details", act: { journey: j.id } });
+      } else if (j.status === "proposed" && d <= 3) {
+        add(1, { id: "book-" + j.id, tone: "bad", title: `Book now: ${fDay(j.date)}`, detail: route(j) + (d === 0 ? ", tonight" : d === 1 ? ", tomorrow" : ` in ${d} days`) + ".", btn: "Book", act: { journey: j.id } });
+      } else if (j.status === "proposed" && d <= lead && E.addDays(j.date, -lead) <= E.addDays(today, 7)) {
+        add(5, { id: "due-" + j.id, tone: "warn", title: `Book your ${fDay(j.date)} ticket`, detail: route(j) + ". Book by " + fDay(st.bookBy < today ? today : st.bookBy) + ".", btn: "Book", act: { journey: j.id } });
+      }
+    }
+    const unlogged = unloggedPast(state, today);
+    const c = outlook.comp.monthly;
+    if (!unlogged.length && c.hasPolicy && c.status === "at-risk") {
+      if (outlook.helps)
+        add(2, { id: "risk", tone: "bad", title: `Need ${c.required - c.projected} more office ${c.required - c.projected === 1 ? "day" : "days"} this month`, detail: `${c.completed} done, ${outlook.workLeft} working ${outlook.workLeft === 1 ? "day" : "days"} left. An updated plan fits ${outlook.bestTotal - c.projected} more in.`, btn: "Review plan", act: { plan: ym, auto: true } });
+      else
+        add(2, { id: "risk", tone: "bad", title: `${fMonthShort(ym)} can reach ${c.projected} of ${c.required} office days`, detail: "Not enough working days are left to meet the rule. Log any office days you've missed, or add leave or holidays that lower it.", btn: "See details", act: { more: "compliance" } });
+    }
+    for (const m of staleMonths(state, today))
+      add(3, { id: "stale-" + m, tone: "warn", title: `${fMonthShort(m)} plan may be out of date`, detail: "A rule, holiday, family date or booked trip changed after you saved it.", btn: "Review plan", act: { plan: m, auto: true } });
+    if (!acceptedPlan(state, ym))
+      add(3, { id: "noplan", tone: "warn", title: `No plan for ${fMonthShort(ym)} yet`, detail: "Make one to see where to be each day and which tickets to book.", btn: "Make a plan", act: { plan: ym } });
+    if (unlogged.length)
+      add(4, { id: "confirm", tone: "warn", title: `Confirm ${plural(unlogged.length, "past office day")}`, detail: "Only confirmed office days count. " + unlogged.slice(0, 3).map(fDay).join(", ") + (unlogged.length > 3 ? "…" : ""), btn: `Confirm ${unlogged.length === 1 ? "day" : "days"}`, act: { confirm: unlogged } });
+    const next = addMonths(ym, 1);
+    const left = E.diffDays(today, E.monthDays(ym).slice(-1)[0]);
+    if (left <= 10 && !acceptedPlan(state, next))
+      add(7, { id: "next", tone: "info", title: `Plan ${fMonthShort(next)}`, detail: `${fMonthShort(ym)} ends in ${plural(left + 1, "day")}. Planning early gives you time to book.`, btn: `Plan ${fMonthShort(next)}`, act: { plan: next } });
+    const cls = E.classifyMonth(ym, state).find((d) => d.date === today);
+    const pd = planDay(state, today);
+    if (cls && cls.workday && !state.attendance[today] && !(pd && pd.location === "HYD") && new Date().getHours() >= 17)
+      add(8, { id: "logtoday", tone: "info", title: "Log today", detail: "Office, home, leave or work trip?", btn: "Log today", act: { day: today } });
+    const last = state.meta.lastBackup;
+    const hasData = (state.plans || []).length || Object.keys(state.attendance || {}).length;
+    if (hasData && !state.meta.example && (!last || E.diffDays(last.slice(0, 10), today) > 30))
+      add(9, { id: "backup", tone: "neutral", title: last ? "Time for a backup" : "Save your first backup", detail: last ? `Last backup ${fDay(last.slice(0, 10))}. Your data lives only on this phone.` : "Your data lives only on this phone. A backup file keeps it safe.", btn: "Save backup", act: { more: "data" } });
+    if (lockAvail && !state.meta.example)
+      add(10, { id: "lock", tone: "neutral", title: "Protect LifeSync with your fingerprint", detail: "Ask for fingerprint, face, PIN or pattern when it opens.", btn: "Set up App lock", act: { more: "lock" }, dismiss: "lifesync.lockOffer" });
+    return out.sort((a, b) => a.pri - b.pri);
+  }
+
+  function ActionItems({ state, today, go, openJourney, openConfirm, openDay }) {
+    const outlook = useOfficeOutlook(state, today);
+    const [lockAvail, setLockAvail] = useState(false);
+    const [hidden, setHidden] = useState(() => { try { return localStorage.getItem("lifesync.lockOffer") === "no"; } catch (e) { return false; } });
+    useEffect(() => {
+      if (!window.LSLock || LSLock.read()) return;
+      LSLock.unsupportedReason().then((r) => setLockAvail(!r));
+    }, []);
+    const items = buildActions({ state, today, outlook, lockAvail: lockAvail && !hidden && !(window.LSLock && LSLock.read()) });
+    const run = (a) => {
+      if (a.journey) openJourney(a.journey);
+      else if (a.plan) go("plan", a.plan, !!a.auto);
+      else if (a.confirm) openConfirm(a.confirm);
+      else if (a.day) openDay(a.day);
+      else if (a.more) go("more", a.more);
+    };
+    const dismiss = (key) => { try { localStorage.setItem(key, "no"); } catch (e) {} setHidden(true); };
+    const urgent = items.filter((x) => x.pri <= 2).length;
+    return html`<div class="section">
+      <div class="section-head"><h2>Action items</h2>${items.length ? html`<span class=${"pill " + (urgent ? "bad" : "neutral")}>${items.length}${urgent ? ` · ${urgent} urgent` : ""}</span>` : null}</div>
+      ${items.length
+        ? html`<div class="list actions">${items.map((x, i) => html`<div class=${"item action " + x.tone}>
+            <span class="action-rank" aria-hidden="true">${i + 1}</span>
+            <div class="stack grow"><strong class="small">${x.title}</strong><span class="tiny muted">${x.detail}</span>
+              <div class="btn-row"><button class=${"btn small " + (x.pri <= 3 ? "primary" : "")} onClick=${() => run(x.act)}>${x.btn}</button>${x.dismiss ? html`<button class="btn small ghost" onClick=${() => dismiss(x.dismiss)}>Not now</button>` : null}</div>
+            </div></div>`)}</div>`
+        : html`<div class="list"><div class="empty">All done. Nothing needs you right now. 🎉</div></div>`}
+    </div>`;
+  }
+
   function LockOffer({ go }) {
     const [show, setShow] = useState(false);
     useEffect(() => {
@@ -456,11 +558,17 @@
     const comp = E.compliance(ym, state, plan, today);
     const stale = staleMonths(state, today);
     const unlogged = unloggedPast(state, today);
-    const nextJ = (state.journeys || []).filter((j) => j.date >= today && !["cancelled", "completed"].includes(j.status)).sort((a, b) => a.date.localeCompare(b.date))[0];
+    const upcoming = (state.journeys || []).filter((j) => j.date >= today && !["cancelled", "completed"].includes(j.status)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
     const thisWeek = comp.weeks.find((w) => w.dates.includes(today));
     const hour = new Date().getHours();
     const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-    const loc = pd ? pd.location : null;
+    // What you logged today wins over what the plan said.
+    const loc = att === "wfo" ? "BLR" : pd ? pd.location : null;
+    const todayText = att === "wfo" ? "In the office · logged"
+      : att === "wfh" ? "Working from home · logged"
+      : att === "leave" ? "On leave · logged"
+      : att === "business" ? "On a work trip · logged"
+      : null;
     const famSoon = (state.family || [])
       .filter((f) => f.end >= today && f.start <= E.addDays(today, 30) && f.status !== "unavailable")
       .sort((a, b) => a.start.localeCompare(b.start))
@@ -473,16 +581,12 @@
         <p class="small">Rules, dates and the booked journey are samples so you can see how LifeSync works. Replace them with your own, or remove them in Backup & data.</p>
         <div><button class="link" onClick=${() => go("more", "data")}>Remove example data</button></div></${Alert}>` : null}
 
-      ${state.meta.example ? null : html`<${LockOffer} go=${go} />`}
-      ${stale.map((m) => html`<${Alert} tone="warn" title=${`Your ${fMonthShort(m)} plan may be out of date`}>
-        <p class="small">A rule, holiday, family date or booked journey changed after you saved it.</p>
-        <div><button class="btn small primary" onClick=${() => go("plan", m, true)}>Review an updated plan</button></div></${Alert}>`)}
 
       <div class=${"where " + (loc || "none")}>
         <span class="eyebrow">Today</span>
         ${loc
           ? html`<span class="big">${CITY[loc]}</span>
-            <span class="small">${pd.mode === "wfo" ? "Office day" : pd.mode === "wfh" ? "Working from home" : pd.mode === "closed" ? "Office closed · working from home" + (cls && cls.closed && cls.closed.label ? ": " + cls.closed.label : "") : pd.mode === "holiday" ? "Holiday" + (cls && cls.holiday ? ": " + cls.holiday.label : "") : pd.mode === "leave" ? "On leave" : "Day off"}
+            <span class="small">${todayText ? todayText : pd.mode === "wfo" ? "Office day" : pd.mode === "wfh" ? "Working from home" : pd.mode === "closed" ? "Office closed · working from home" + (cls && cls.closed && cls.closed.label ? ": " + cls.closed.label : "") : pd.mode === "holiday" ? "Holiday" + (cls && cls.holiday ? ": " + cls.holiday.label : "") : pd.mode === "leave" ? "On leave" : "Day off"}
               ${tonight ? html` · Travelling tonight to ${CITY[tonight.to]}${tonight.depTime ? " at " + tonight.depTime : ""}` : null}</span>
             <span class="stamp" aria-hidden="true">${loc}</span>`
           : html`<span class="big" style="font-size:22px">No plan for ${fMonthShort(ym)} yet</span>
@@ -490,31 +594,17 @@
             <div><button class="btn primary small" onClick=${() => go("plan", ym)}>Make a plan</button></div>`}
       </div>
 
+      <${ActionItems} state=${state} today=${today} go=${go} openJourney=${openJourney} openConfirm=${openConfirm} openDay=${openDay} />
+
       ${cls && cls.workday ? html`<div class="card"><${LogDay} state=${state} iso=${today} today=${today} setAttendance=${setAttendance} label="Log today" /></div>` : null}
 
-      ${unlogged.length ? html`<${Alert} tone="warn" title=${`${plural(unlogged.length, "planned office day")} to confirm`}>
-        <p class="small">Did you go to the office? Only confirmed office days count. ${unlogged.slice(0, 4).map(fDay).join(", ")}${unlogged.length > 4 ? "…" : ""}</p>
-        <div><button class="btn small" onClick=${() => openConfirm(unlogged)}>Confirm ${unlogged.length === 1 ? fDay(unlogged[0]) : plural(unlogged.length, "day")}</button></div></${Alert}>` : null}
-      ${plan && !stale.includes(ym) && !unlogged.length && comp.monthly.status === "at-risk" ? html`<${Alert} tone="warn" title=${`On track for ${comp.monthly.projected} of ${comp.monthly.required} office days`}>
-        <p class="small">You've worked from home on some planned office days. An updated plan can fit in the ${comp.monthly.required - comp.monthly.projected} you still need.</p>
-        <div><button class="btn small primary" onClick=${() => go("plan", ym, true)}>Review an updated plan</button></div></${Alert}>` : null}
-
       <div class="section">
-        <div class="section-head"><h2>Next up</h2>${rem.length ? html`<span class="small muted">${plural(rem.length, "action")}</span>` : null}</div>
-        ${rem.length || nextJ
-          ? html`<div class="list">
-            ${rem.slice(0, 4).map(
-              (r) => html`<button class="item" onClick=${() => openJourney(r.journey.id)}>
-                <div class="stack grow"><div class="row wrap"><${Route} j=${r.journey} /><${Pill} map=${JSTATUS} k=${r.state.status} /></div>
-                <span class="small">${r.text}</span><span class="tiny muted">${fDay(r.journey.date)}${r.journey.depTime ? " · " + r.journey.depTime : ""}</span></div></button>`
-            )}
-            ${nextJ && !rem.some((r) => r.journey.id === nextJ.id)
-              ? html`<button class="item" onClick=${() => openJourney(nextJ.id)}><div class="stack grow">
-                <div class="row wrap"><${Route} j=${nextJ} /><${Pill} map=${JSTATUS} k=${E.journeyState(nextJ, today, state.prefs).status} /></div>
-                <span class="small">Next journey · ${fDay(nextJ.date)}${nextJ.depTime ? " at " + nextJ.depTime : ""}</span></div></button>`
-              : null}
-          </div>`
-          : html`<div class="list"><div class="empty">No journeys or booking actions coming up.</div></div>`}
+        <div class="section-head"><h2>Upcoming journeys</h2><button class="link" onClick=${() => go("travel")}>All</button></div>
+        ${upcoming.length
+          ? html`<div class="list">${upcoming.map((j) => html`<button class="item" onClick=${() => openJourney(j.id)}>
+              <div class="stack grow"><div class="row wrap"><${Route} j=${j} /><${Pill} map=${JSTATUS} k=${E.journeyState(j, today, state.prefs).status} /></div>
+              <span class="tiny muted">${fDay(j.date)} · ${j.depTime ? "departs " + j.depTime : "evening"} → ${arriveLabel(j)}</span></div></button>`)}</div>`
+          : html`<div class="list"><div class="empty">No journeys coming up.</div></div>`}
       </div>
 
       <div class="section">
@@ -954,7 +1044,7 @@
           <div class="date" style="width:46px;text-align:center"><div class="tiny muted">${fmt(j.date, { month: "short" })}</div><div class="num" style="font-size:18px;font-weight:700">${Number(j.date.slice(8))}</div></div>
           <div class="stack grow"><div class="row wrap"><${Route} j=${j} /><${Pill} map=${JSTATUS} k=${s.status} />${j.locked && j.status === "proposed" ? html`<span class="pill info">Your date</span>` : null}</div>
             <span class="small">${[j.depTime ? "Departs " + j.depTime : "Evening", arriveLabel(j), j.mode, j.operator].filter(Boolean).join(" · ")}</span>
-            ${s.action ? html`<span class="tiny" style="color:var(--warn)">${s.action}</span>` : null}</div></button>`;
+            ${s.action ? html`<span class="tiny" style="color:var(--warn)">${prettyDates(s.action)}</span>` : null}</div></button>`;
       })}</div>` : html`<div class="list"><div class="empty">${tab === "upcoming" ? "No upcoming journeys. Save a plan to get proposed journeys, or add one you've booked." : "Nothing here yet."}</div></div>`}
       <${HelpLink} id="travel" openHelp=${openHelp} label="How bookings and reminders work" />
       <p class="tiny muted">LifeSync doesn't check live seat availability. Record what you booked, and it reminds you about booking dates, waitlists and departures.</p>
@@ -983,7 +1073,7 @@
       </div>
       <${Field} label="Status" id="j-status"><select id="j-status" value=${j.status} onChange=${set("status")}>
         <option value="proposed">Proposed (idea, not booked)</option><option value="booked">Booked and confirmed</option><option value="waitlisted">Waitlisted / not confirmed</option><option value="completed">Travel completed</option><option value="cancelled">Changed / cancelled</option></select></${Field}>
-      ${s.action ? html`<${Alert} tone=${s.status === "waitlisted" || s.status === "booking-due" ? "warn" : "info"}><p class="small">${s.action}</p></${Alert}>` : null}
+      ${s.action ? html`<${Alert} tone=${s.status === "waitlisted" || s.status === "booking-due" ? "warn" : "info"}><p class="small">${prettyDates(s.action)}</p></${Alert}>` : null}
       ${j.status === "proposed" ? html`<label class="check"><input type="checkbox" id="j-lock" checked=${!!j.locked || moved} disabled=${moved} onChange=${(e) => setJ(Object.assign({}, j, { locked: e.target.checked }))} />Keep this date when replanning${moved ? " (you changed the date)" : ""}</label>` : null}
       <div class="grid2">
         <${Field} label="Operator / train" id="j-op"><input id="j-op" type="text" value=${j.operator} onInput=${set("operator")} placeholder="e.g. train name or bus operator" /></${Field}>
@@ -1269,12 +1359,12 @@
   }
 
   // ------------------------------------------------------------ More: Data
-  function DataScreen({ state, replaceState, back, toast, storeLabel }) {
+  function DataScreen({ state, replaceState, back, toast, storeLabel, markBackup }) {
     const [pending, setPending] = useState(null);
     const fileRef = useRef(null);
     const exportJSON = () => {
       const blob = new Blob([JSON.stringify({ app: "LifeSync", version: 1, exportedAt: new Date().toISOString(), state }, null, 2)], { type: "application/json" });
-      deliverFile(`LifeSync-backup-${todayISO()}.json`, blob, toast);
+      deliverFile(`LifeSync-backup-${todayISO()}.json`, blob, toast).then(() => markBackup && markBackup());
     };
     const onFile = (e) => {
       const f = e.target.files && e.target.files[0];
@@ -1776,7 +1866,7 @@
     else if (sub === "reports") body = html`<${ReportsScreen} state=${state} today=${today} back=${back} toast=${toast} />`;
     else if (sub === "share") body = html`<${ShareScreen} back=${back} toast=${toast} />`;
     else if (sub === "lock") body = html`<${AppLockScreen} back=${back} lockCfg=${lockCfg} setLockCfg=${setLockCfg} toast=${toast} userName=${state.prefs.name} />`;
-    else if (sub === "data") body = html`<${DataScreen} state=${state} replaceState=${replaceState} back=${back} toast=${toast} storeLabel=${store ? store.label : ""} />`;
+    else if (sub === "data") body = html`<${DataScreen} state=${state} replaceState=${replaceState} back=${back} toast=${toast} storeLabel=${store ? store.label : ""} markBackup=${() => update("meta", Object.assign({}, state.meta, { lastBackup: new Date().toISOString() }))} />`;
     else body = html`<${MoreScreen} go=${go} state=${state} today=${today} />`;
 
     let sheetEl = null;

@@ -483,3 +483,27 @@ test("usual office-city WFH days apply to every month unless a month overrides t
   const p = E.planMonth("2027-01", s);
   assert.ok(p.days.filter((d) => d.location === "BLR" && d.mode === "wfh").length >= 2);
 });
+
+test("a plan isn't marked out of date by trips in other months or by booking its own trips", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }] });
+  const oct = E.planMonth("2026-10", s);
+  const fp = E.inputsFingerprint("2026-10", s, oct);
+  // booking a November ticket, and completing it later
+  s.journeys.push({ date: "2026-11-09", from: "BLR", to: "HYD", status: "booked" });
+  assert.equal(E.inputsFingerprint("2026-10", s, oct), fp);
+  s.journeys[0].status = "completed";
+  assert.equal(E.inputsFingerprint("2026-10", s, oct), fp);
+  // booking then completing one of October's own suggested trips
+  const j = oct.journeys[0];
+  s.journeys.push({ date: j.date, from: j.from, to: j.to, status: "booked" });
+  assert.equal(E.inputsFingerprint("2026-10", s, oct), fp);
+  s.journeys[1].status = "completed";
+  assert.equal(E.inputsFingerprint("2026-10", s, oct), fp);
+  // a rule that only applies from December doesn't touch October
+  s.policies.push({ type: "fixedOffice", weekdays: [3], effectiveFrom: "2026-12-01" });
+  assert.equal(E.inputsFingerprint("2026-10", s, oct), fp);
+  // but a new fixed October trip the plan didn't expect does
+  const other = ["2026-10-22", "2026-10-23", "2026-10-24"].find((d) => !oct.journeys.some((x) => x.date === d));
+  s.journeys.push({ date: other, from: "BLR", to: "HYD", status: "booked" });
+  assert.notEqual(E.inputsFingerprint("2026-10", s, oct), fp);
+});

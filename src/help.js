@@ -13,10 +13,25 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.10.2",
-    updated: "2026-10-10",
+    version: "0.11.0",
+    updated: "2026-10-12",
 
     whatsNew: [
+      {
+        version: "0.11.0",
+        items: [
+          "<b>Action items</b> on Today: everything that needs you, in priority order, each with one button to fix it.",
+          "Fixed: plans were marked <i>out of date</i> by trips in other months, or by booking or completing a planned trip.",
+          "<b>Upcoming journeys</b> on Today lists your next three trips.",
+        ],
+      },
+      {
+        version: "0.10.3",
+        items: [
+          "The Today card now shows what you logged (for example <i>In the office · logged</i>) instead of what the plan said.",
+          "Booking dates read like <i>Fri, 6 Nov</i>, and <b>Next up</b> is in date order with urgent items first.",
+        ],
+      },
       {
         version: "0.10.2",
         items: ["Access codes work however they're entered in the GitHub secret: separated by commas or new lines, with or without quotes."],
@@ -130,11 +145,24 @@
         id: "today",
         title: "Today and logging your days",
         body: `
+<p><b>Action items</b> at the top lists everything that needs you, most urgent first, each with one button that takes you to the fix:</p>
+<ol>
+<li>Urgent travel: an unconfirmed ticket, travel tonight or tomorrow, or a ticket to book within 3 days.</li>
+<li>Office days at risk this month.</li>
+<li>A plan that's out of date, or a month with no plan.</li>
+<li>Past office days to confirm.</li>
+<li>Tickets to book this week.</li>
+<li>Past trips to mark completed or cancelled.</li>
+<li>Next month's plan, in the last 10 days of the month.</li>
+<li>Logging today, in the evening if you haven't.</li>
+<li>A backup reminder every 30 days.</li>
+</ol>
+<p>Items disappear once they're done. When nothing needs you, it says <b>All done</b>.</p>
 <p><b>Today</b> shows where you should be, tonight's journey if any, booking actions, your office-day count and your daughter's upcoming dates.</p>
 <p><b>In Bengaluru</b> you can work from the office or from home. Each day, tap <b>Office</b> or <b>Home</b> in <b>Log today</b>. Planning 12 office days doesn't stop you working from home on others.</p>
 <p><b>In Hyderabad</b> the day is logged as <b>Home</b> automatically. Change it only for <b>Leave</b> or a <b>Work trip</b>.</p>
-<p>Planned office days you haven't confirmed appear on Today as <b>… to confirm</b>. Tap <b>Confirm</b> to mark several at once. To change any other day, tap it in <b>Calendar</b>.</p>
-<p>If you work from home on a planned office day and fall short, Today shows <b>On track for X of 12</b>. Tap <b>Review an updated plan</b> and LifeSync fits the missing days into the rest of the month.</p>
+<p>Planned office days you haven't confirmed appear in <b>Action items</b> as <b>Confirm past office days</b>. Tap it to mark several at once. To change any other day, tap it in <b>Calendar</b>.</p>
+<p>If you work from home on a planned office day and fall short, <b>Action items</b> shows <b>Need X more office days</b>. Tap <b>Review plan</b> and LifeSync fits the missing days into the rest of the month. If they can no longer fit, it tells you how many you can still reach instead.</p>
 <p class="tip">Only days logged as <b>Office</b> count. Your real total shows as it is, whether that's above or below the target. In Calendar, <b>DONE</b> means office and an outlined <b>WFH</b> means you worked from home in Bengaluru.</p>`,
       },
       {

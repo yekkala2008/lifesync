@@ -21,3 +21,5 @@ When you **rename or remove** a screen, tile, button or term:
 - Planning and compliance logic lives in `src/engine.js` and must stay pure and unit-tested (`npm test`). Add a test for every rule change.
 - Never book, cancel or change tickets automatically, and never count a planned office day as completed.
 - Bump `version` for every release; it also refreshes the offline cache on installed phones.
+- If you change `inputsFingerprint` (what makes a plan "out of date"), bump `FP_VERSION` in `src/engine.js`. Saved plans are then re-checked once after the update instead of all being flagged. `test/fingerprint.test.js` fails if you forget.
+- Test updates against data saved by the previous version, not only a fresh install.

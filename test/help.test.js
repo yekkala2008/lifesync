@@ -22,6 +22,7 @@ const RETIRED = [
   { term: /\bdaughters?\b/i, why: "the app no longer names a person; say 'family time'" },
   { term: /\bNext up\b/, why: "renamed to 'Upcoming journeys' / 'Action items'" },
   { term: /Most family time/, why: "the plan option is 'Most home time'" },
+  { term: /blue-mango|team-kite|green-lotus/i, why: "sample codes look real and could end up as someone's actual code; use your-code-1 placeholders" },
 ];
 
 test("Help mentions only More tiles that exist in the app", () => {

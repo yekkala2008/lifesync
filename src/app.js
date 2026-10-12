@@ -1111,6 +1111,18 @@
   const CATS = { holiday: "Holiday", "office-closed": "Office closed (work from home)", leave: "Leave", family: "Family time", event: "Event", "business-travel": "Work trip", blackout: "No-travel date" };
   const FSTATUS = { available: ["ok", "Confirmed"], tentative: ["warn", "Tentative"], unavailable: ["bad", "Away"] };
   // Older versions kept family dates in a separate list; move them into Holidays & leave.
+  // Plans saved by an older version used an older way of telling whether their
+  // inputs changed. After an update, re-check them with today's method once,
+  // so an update on its own never makes a plan look out of date.
+  function restampPlans(s) {
+    let changed = false;
+    s.plans = (s.plans || []).map((p) => {
+      if (p.fpv === E.FP_VERSION) return p;
+      changed = true;
+      return Object.assign({}, p, { fingerprint: E.inputsFingerprint(p.month, s, p), fpv: E.FP_VERSION });
+    });
+    return changed;
+  }
   function migrateFamily(s) {
     if (!(s.family || []).length) return false;
     s.calendar = (s.calendar || []).concat(
@@ -1360,7 +1372,7 @@
         <div class="btn-row"><button class="btn" onClick=${exportJSON}>Save backup</button><button class="btn" onClick=${() => fileRef.current && fileRef.current.click()}>Restore from backup</button></div>
         <input ref=${fileRef} id="restore-file" type="file" accept="application/json,.json" hidden onChange=${onFile} />
         ${pending ? html`<${Alert} tone="warn" title="Replace everything with this backup?"><p class="small">Backup from ${pending.exportedAt ? fDay(pending.exportedAt.slice(0, 10)) : "an unknown date"}. Your current data will be replaced.</p>
-          <div class="btn-row"><button class="btn small danger" onClick=${() => { { const r = Object.assign(EMPTY(), pending.state); migrateFamily(r); replaceState(r); } setPending(null); toast("Backup restored"); }}>Replace my data</button><button class="btn small" onClick=${() => setPending(null)}>Cancel</button></div></${Alert}>` : null}
+          <div class="btn-row"><button class="btn small danger" onClick=${() => { { const r = Object.assign(EMPTY(), pending.state); migrateFamily(r); restampPlans(r); replaceState(r); } setPending(null); toast("Backup restored"); }}>Replace my data</button><button class="btn small" onClick=${() => setPending(null)}>Cancel</button></div></${Alert}>` : null}
       </div>
       <div class="card"><h3>Start over</h3><p class="small muted">Deletes all rules, plans, journeys and logs.</p><${ConfirmButton} label="Delete everything" onConfirm=${() => { replaceState(EMPTY()); toast("All data deleted"); }} /></div>
     </div>`;
@@ -1702,6 +1714,7 @@
         s.prefs = Object.assign({}, DEFAULT_PREFS, loaded.prefs || {});
         s.meta = Object.assign({ setupDone: false }, loaded.meta || {});
         if (migrateFamily(s)) { st.save("calendar", s.calendar); st.save("family", s.family); }
+        if (restampPlans(s)) st.save("plans", s.plans);
         setStore(st);
         setState(s);
       });
@@ -1766,7 +1779,7 @@
       const version = {
         id: uid(), month: ym, createdAt: new Date().toISOString(), profile: plan.profile, label: plan.label,
         days: plan.days, journeys: plan.journeys, explanation: plan.explanation, metrics: plan.metrics, warnings: plan.warnings || [],
-        fingerprint: fp, accepted: true, reason, example: !!state.meta.example,
+        fingerprint: fp, fpv: E.FP_VERSION, accepted: true, reason, example: !!state.meta.example,
       };
       let plans = (state.plans || []).map((p) => (p.month === ym && p.accepted ? Object.assign({}, p, { accepted: false }) : p));
       plans.push(version);
@@ -1789,6 +1802,7 @@
           const have = new Set(s.journeys.map(key));
           for (const j of p.journeys) if (!have.has(key(j))) s.journeys.push({ id: uid(), from: j.from, to: j.to, date: j.date, depTime: "", arrTime: "", mode: "train", operator: "", ref: "", cost: "", status: j.date < today ? "completed" : "proposed", notes: "", planMonth: ym, example: true });
           s.plans[0].fingerprint = E.inputsFingerprint(ym, s, s.plans[0]);
+          s.plans[0].fpv = E.FP_VERSION;
         }
       }
       replaceState(s);

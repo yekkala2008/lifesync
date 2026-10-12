@@ -803,6 +803,9 @@
   /** Stable fingerprint of everything that can change a plan for a month. */
   // `plan` (optional): fixed journeys that match the plan's own trips don't
   // count, so booking or completing a suggested trip doesn't make it stale.
+  // Bump whenever the fingerprint calculation changes. Plans saved with an
+  // older calculation are re-stamped on load instead of being flagged.
+  const FP_VERSION = 3;
   function inputsFingerprint(ym, state, plan) {
     const planTrips = new Set(((plan && plan.journeys) || []).map((j) => `${j.date}|${j.from}|${j.to}`));
     const monthStart = ym + "-01";
@@ -869,6 +872,6 @@
     // travel
     STATUSES, journeyState, reminders,
     // replanning
-    inputsFingerprint, diffPlans, placeNames, officeCityWfhFor, familyItems,
+    inputsFingerprint, FP_VERSION, diffPlans, placeNames, officeCityWfhFor, familyItems,
   };
 });

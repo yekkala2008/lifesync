@@ -13,10 +13,18 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.12.0",
+    version: "0.12.2",
     updated: "2026-10-12",
 
     whatsNew: [
+      {
+        version: "0.12.2",
+        items: ["Help's sharing steps now show placeholder access codes (<i>your-code-1, your-code-2</i>) instead of real-looking examples. Always choose your own codes."],
+      },
+      {
+        version: "0.12.1",
+        items: ["Fixed: after updating LifeSync, saved plans no longer show <i>may be out of date</i> unless something you entered actually changed."],
+      },
       {
         version: "0.12.0",
         items: [
@@ -269,7 +277,7 @@
         body: `
 <p>If you add a holiday, change a rule, add family time, or book a trip that isn't in the plan, <b>Today</b> shows <b>Your plan may be out of date</b>.</p>
 <p>Tap <b>Review an updated plan</b> to see new options and a summary of what changes before anything is saved.</p>
-<p class="tip">Booking or completing a trip that the plan already suggested doesn't trigger this.</p>`,
+<p class="tip">Booking or completing a trip that the plan already suggested doesn't trigger this, and nor does updating LifeSync itself.</p>`,
       },
       {
         id: "compliance",
@@ -324,7 +332,7 @@
 <p><b>Making it invite-only (owner):</b></p>
 <ol>
 <li>On GitHub, open the <b>lifesync</b> repository → <b>Settings → Secrets and variables → Actions</b>.</li>
-<li>Tap <b>New repository secret</b>. Name: <b>LIFESYNC_ACCESS_CODES</b>. Value: one or more codes separated by commas or on separate lines, such as <i>blue-mango-2026, team-kite-81</i>. Use 8 characters or more.</li>
+<li>Tap <b>New repository secret</b>. Name: <b>LIFESYNC_ACCESS_CODES</b>. Value: one or more codes separated by commas or on separate lines, such as <i>your-code-1, your-code-2</i> (make up your own; don't use these). Use 8 characters or more, and nothing easy to guess.</li>
 <li>Go to <b>Actions → Test and publish LifeSync → Run workflow</b>.</li>
 </ol>
 <p>From then on, new people see an <b>Invite only</b> screen and enter a code once per phone. You keep using it as normal on phones that already have access. To stop a code working, remove it from the secret and run the workflow again; phones that used it are asked for a new code.</p>

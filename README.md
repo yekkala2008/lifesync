@@ -60,7 +60,7 @@ Works the same on Windows. No Docker needed, but `docker run --rm -p 8080:80 -v 
 
 The planner looks at every day of the month and decides where you are (Bengaluru or Hyderabad) and, on Bengaluru working days, whether you go to the office. Journeys are overnight, between two days.
 
-**Hard rules (never traded away):** monthly and weekly minimums, fixed office weekdays, required on-site dates, fixed WFH weekdays, holidays, leave and work trips, must-attend events, booked, waitlisted or completed journeys, and no-travel dates. Weekday holidays are spent at home in Hyderabad, and office-closed days (Holidays & leave → type "Office closed (work from home)") are worked from home in Hyderabad, unless a ticket or must-attend event says otherwise (both switchable in Rules → Travel). If these can't all be met, the app lists which ones conflict instead of guessing.
+**Hard rules (never traded away):** monthly and weekly minimums, fixed office weekdays, required on-site dates, fixed WFH weekdays, holidays, leave and work trips, must-attend events, booked, waitlisted or completed journeys, and no-travel dates. Weekday holidays are spent at home in Hyderabad, and office-closed days (Holidays, leave & family → type "Office closed (work from home)") are worked from home in Hyderabad, unless a ticket or must-attend event says otherwise (both switchable in Rules → Travel). If these can't all be met, the app lists which ones conflict instead of guessing.
 
 **Preferences (weighted, adjustable in Rules → Planning priorities):** fewer trips, family time (from Holidays, leave & family), weekends and weekdays at home, avoiding very short stays, travelling on preferred days.
 

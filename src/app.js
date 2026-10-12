@@ -98,10 +98,10 @@
       { id: uid(), category: "holiday", label: "Example company holiday", start: hol, example: true },
       { id: uid(), category: "event", label: "Example: family function", start: nextSat, location: "HYD", mustAttend: true, example: true },
     ];
-    s.family = [
-      { id: uid(), person: "Daughter", location: "BLR", start: sat1, end: sun1, status: "available", source: "Manual", updatedAt: today, example: true },
-      { id: uid(), person: "Daughter", location: "BLR", start: sat2, end: E.addDays(sat2, 1), status: "tentative", source: "Manual", updatedAt: today, example: true },
-    ];
+    s.calendar.push(
+      { id: uid(), category: "family", label: "Example: family weekend", location: "BLR", start: sat1, end: sun1, status: "available", example: true },
+      { id: uid(), category: "family", label: "Example: family weekend", location: "BLR", start: sat2, end: E.addDays(sat2, 1), status: "tentative", example: true }
+    );
     s.journeys = [
       { id: uid(), from: "HYD", to: "BLR", date: sunBook, depTime: "21:30", arrTime: "06:45", mode: "train", operator: "Example overnight train", ref: "", cost: 1150, status: "booked", notes: "Example booking", example: true },
     ];
@@ -569,10 +569,6 @@
       : att === "leave" ? "On leave · logged"
       : att === "business" ? "On a work trip · logged"
       : null;
-    const famSoon = (state.family || [])
-      .filter((f) => f.end >= today && f.start <= E.addDays(today, 30) && f.status !== "unavailable")
-      .sort((a, b) => a.start.localeCompare(b.start))
-      .slice(0, 3);
 
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">${fLong(today)}</span><h1>${greet}${state.prefs.name ? ", " + state.prefs.name : ""}</h1></div>
@@ -614,21 +610,6 @@
         </div>
       </div>
 
-      <div class="section">
-        <div class="section-head"><h2>Family</h2><button class="link" onClick=${() => go("more", "family")}>All dates</button></div>
-        ${famSoon.length
-          ? html`<div class="list">${famSoon.map((f) => {
-              const days = [];
-              for (let d = f.start; d <= f.end; d = E.addDays(d, 1)) days.push(d);
-              const there = days.filter((d) => { const p = planDay(state, d); return p && p.location === (f.location || "BLR"); }).length;
-              const known = days.some((d) => planDay(state, d));
-              return html`<div class="item" style="cursor:default"><div class="stack grow">
-                <div class="row wrap"><strong>${f.person}</strong><${City} c=${f.location || "BLR"} /><span class=${"pill " + (f.status === "tentative" ? "warn" : "ok")}>${f.status === "tentative" ? "Tentative" : "Available"}</span></div>
-                <span class="small">${fDay(f.start)}${f.end !== f.start ? " – " + fDay(f.end) : ""}</span>
-                <span class="tiny muted">${known ? (there === days.length ? `You're in ${CITY[f.location || "BLR"]} for all of it` : there ? `You're there ${there} of ${days.length} days` : `Your plan has you in ${CITY[other(f.location || "BLR")]}`) : "No plan covers these dates yet"}</span></div></div>`;
-            })}</div>`
-          : html`<div class="list"><div class="empty">No family dates in the next 30 days.<button class="btn small" onClick=${() => go("more", "family")}>Add your daughter's dates</button></div></div>`}
-      </div>
     </div>`;
   }
 
@@ -689,7 +670,7 @@
     return html`<div class="metrics">
       <div><span class="v">${m.wfo}</span><span class="k">office days</span></div>
       <div><span class="v">${m.trips}</span><span class="k">one-way trips</span></div>
-      <div><span class="v">${m.daughterWindow ? `${m.daughterDays}/${m.daughterWindow}` : "—"}</span><span class="k">daughter days covered</span></div>
+      ${(() => { const fw = m.familyWindow != null ? m.familyWindow : m.daughterWindow; const fd = m.familyDays != null ? m.familyDays : m.daughterDays; return html`<div><span class="v">${fw ? `${fd}/${fw}` : "—"}</span><span class="k">family-time days covered</span></div>`; })()}
       <div><span class="v">${m.hydWeekends}</span><span class="k">home weekend days</span></div>
     </div>${m.cityWfh ? html`<span class="tiny muted">${m.cityWfh} work-from-home ${m.cityWfh === 1 ? "day" : "days"} in ${CITY.BLR} · ${m.hydDays} days in ${CITY.HYD}</span>` : html`<span class="tiny muted">${m.hydDays} days in ${CITY.HYD}</span>`}`;
   }
@@ -858,14 +839,14 @@
 
       ${!current && !result ? html`<div class="card">
         <h3>No plan for ${fMonthShort(ym)} yet</h3>
-        <p class="small muted">LifeSync works out where you should be each day so you meet your office rules with as few trips as possible, and lines up time with your daughter in ${CITY.BLR} and family at home. Nothing is booked or saved until you choose.</p>
+        <p class="small muted">LifeSync works out where you should be each day so you meet your office rules with as few trips as possible, and lines up your family time. Nothing is booked or saved until you choose.</p>
         <button class="btn primary block" onClick=${run}>Suggest plans</button>
       </div>` : null}
 
       ${result && !result.feasible ? html`<${Alert} tone="bad" title="No plan can meet all your rules this month">
         <ul class="why">${result.issues.map((i) => html`<li>${i.text}</li>`)}</ul>
         <p class="small">Change one of these, or mark an exception, then try again.</p>
-        <div class="btn-row"><button class="btn small" onClick=${() => go("more", "rules")}>Open rules</button><button class="btn small" onClick=${() => go("more", "items")}>Holidays & leave</button></div></${Alert}>` : null}
+        <div class="btn-row"><button class="btn small" onClick=${() => go("more", "rules")}>Open rules</button><button class="btn small" onClick=${() => go("more", "items")}>Holidays, leave & family</button></div></${Alert}>` : null}
 
       ${result && result.feasible && !confirm ? html`
         ${result.plans[0].warnings && result.plans[0].warnings.length ? html`<${Alert} tone="warn" title="Some days have already passed">
@@ -914,7 +895,7 @@
           <strong class="small">Journeys</strong>
           ${chosen.journeys.length ? chosen.journeys.map((j) => html`<div class="row small wrap"><span class="num" style="width:96px">${fDay(j.date)}</span><${Route} j=${j} />${isBooked(j) ? html`<span class="pill ok"><span class="glyph">✓</span>Already booked</span>` : isMine(j) ? html`<span class="pill info">Your date · kept fixed</span>` : html`<span class="pill neutral">Added as proposed</span>`}</div>`) : html`<span class="small muted">No journeys needed.</span>`}
           ${diff.removedJourneys.filter((j) => !isBooked(j)).length ? html`<span class="small">Proposed journeys no longer needed will be removed: ${diff.removedJourneys.filter((j) => !isBooked(j)).map((j) => fDay(j.date)).join(", ")}</span>` : null}
-          ${adj.noTravel.length ? html`<span class="small">No-travel evenings saved to Holidays & leave: ${adj.noTravel.map(fDay).join(", ")}</span>` : null}
+          ${adj.noTravel.length ? html`<span class="small">No-travel evenings saved to Holidays, leave & family: ${adj.noTravel.map(fDay).join(", ")}</span>` : null}
         </div>
         <p class="tiny muted">LifeSync never books, cancels or changes tickets. You record bookings yourself in Travel.</p>
         <div class="btn-row"><button class="btn primary" onClick=${() => { acceptPlan(chosen, stale ? "Inputs changed" : changed ? "Adjusted by you" : current ? "Replanned" : "First plan", adj); setResult(null); setConfirm(false); setAdj(EMPTY_ADJ); setHistory([]); }}>Save plan</button><button class="btn" onClick=${() => setConfirm(false)}>Back</button></div>
@@ -929,7 +910,7 @@
   function dayBits(state, iso, classified) {
     const c = classified;
     const pd = planDay(state, iso);
-    const fam = (state.family || []).filter((f) => f.status !== "unavailable" && iso >= f.start && iso <= f.end);
+    const fam = E.familyItems(state).filter((f) => f.status !== "unavailable" && iso >= f.start && iso <= f.end);
     const dep = (state.journeys || []).filter((j) => j.date === iso && j.status !== "cancelled");
     const att = state.attendance[iso];
     return { c, pd, fam, dep, att };
@@ -994,7 +975,7 @@
                 ${b.att === "wfo" ? html`<span class="pill ok"><span class="glyph">✓</span>Office logged</span>` : b.pd && b.pd.mode === "wfo" ? html`<span class="pill neutral">Office planned</span>` : null}
                 ${c.holiday ? html`<span class="pill info">Holiday</span>` : null}${c.closed ? html`<span class="pill neutral">Office closed · WFH</span>` : null}${c.leave ? html`<span class="pill warn">Leave</span>` : null}</div>
               ${c.events.map((e) => html`<span class="small">${e.label}${e.location ? " · " + CITY[e.location] : ""}</span>`)}
-              ${b.fam.map((f) => html`<span class="small">${f.person} available in ${CITY[f.location || "BLR"]}${f.status === "tentative" ? " (tentative)" : ""}</span>`)}
+              ${b.fam.map((f) => html`<span class="small">Family time in ${CITY[f.location || "BLR"]}${f.status === "tentative" ? " (tentative)" : ""}</span>`)}
               ${b.dep.map((j) => html`<span class="small">Journey ${journeyLabel(j)}${j.depTime ? " at " + j.depTime : ""}</span>`)}
             </div></button>`;
         })}</div>`}
@@ -1018,7 +999,7 @@
       ${c.holiday || c.closed || c.leave || c.events.length || c.business ? html`<div class="list">
         ${[c.holiday, c.closed, c.leave, c.business, ...c.events].filter(Boolean).map((it) => html`<div class="item" style="cursor:default"><div class="stack grow"><strong class="small">${it.label || it.category}</strong><span class="tiny muted">${CATS[it.category]}${it.location ? " · " + CITY[it.location] : ""}${it.mustAttend ? " · must attend" : ""}</span></div></div>`)}
       </div>` : null}
-      ${b.fam.length ? html`<div class="list">${b.fam.map((f) => html`<div class="item" style="cursor:default"><div class="stack grow"><strong class="small">${f.person} available</strong><span class="tiny muted">${CITY[f.location || "BLR"]} · ${f.status} · source: ${f.source || "Manual"}</span></div></div>`)}</div>` : null}
+      ${b.fam.length ? html`<div class="list">${b.fam.map((f) => html`<div class="item" style="cursor:default"><div class="stack grow"><strong class="small">${f.person}</strong><span class="tiny muted">Family time · ${CITY[f.location || "BLR"]}${f.status === "tentative" ? " · tentative" : ""}</span></div></div>`)}</div>` : null}
       <div class="btn-row">
         <button class="btn small" onClick=${() => addItem({ category: "holiday", start: iso })}>Add holiday</button>
         <button class="btn small" onClick=${() => addItem({ category: "leave", start: iso })}>Add leave</button>
@@ -1119,44 +1100,6 @@
     </div>`;
   }
 
-  // ------------------------------------------------------------ More: Family
-  function FamilyScreen({ state, today, back, edit }) {
-    const list = (state.family || []).slice().sort((a, b) => b.start.localeCompare(a.start));
-    const upcoming = list.filter((f) => f.end >= today).reverse();
-    const past = list.filter((f) => f.end < today);
-    const Row = (f) => html`<button class="item" onClick=${() => edit(f)}><div class="stack grow">
-      <div class="row wrap"><strong>${f.person}</strong><${City} c=${f.location || "BLR"} /><span class=${"pill " + ({ available: "ok", tentative: "warn", unavailable: "bad", unknown: "neutral" }[f.status] || "neutral")}>${{ available: "Available", tentative: "Tentative", unavailable: "Unavailable", unknown: "Not yet known" }[f.status] || f.status}</span></div>
-      <span class="small">${fDay(f.start)}${f.end !== f.start ? " – " + fDay(f.end) : ""}</span>
-      <span class="tiny muted">Source: ${f.source || "Manual"} · updated ${f.updatedAt ? fDay(f.updatedAt) : "—"}</span></div></button>`;
-    return html`<div class="page">
-      <button class="link back" onClick=${back}>${I.left}More</button>
-      <div class="page-head head-row"><div class="stack" style="gap:4px"><span class="eyebrow">Family</span><h1>Availability</h1></div><button class="btn small primary" onClick=${() => edit({})}>${I.plus}Add</button></div>
-      <p class="small muted">Only dates and a status are stored, never event details. The planner favours being in ${CITY.BLR} when your daughter is free there, and at home in ${CITY.HYD} on weekends unless someone is away.</p>
-      ${upcoming.length ? html`<div class="list">${upcoming.map(Row)}</div>` : html`<div class="list"><div class="empty">No upcoming dates. Add when your daughter is free in ${CITY.BLR}.</div></div>`}
-      ${past.length ? html`<div class="section"><h3 class="muted">Past</h3><div class="list">${past.map(Row)}</div></div>` : null}
-    </div>`;
-  }
-  function FamilySheet({ item, today, onSave, onDelete, onClose }) {
-    const [f, setF] = useState(Object.assign({ person: "Daughter", location: "BLR", start: today, end: today, status: "available", source: "Manual" }, item));
-    const set = (k) => (e) => setF(Object.assign({}, f, { [k]: e.target.value }));
-    const bad = f.end < f.start;
-    return html`<${Sheet} title=${item.id ? "Edit availability" : "Add availability"} onClose=${onClose}>
-      <div class="grid2">
-        <${Field} label="Who" id="f-person"><input id="f-person" type="text" value=${f.person} onInput=${set("person")} /></${Field}>
-        <${Field} label="Where" id="f-loc"><select id="f-loc" value=${f.location} onChange=${set("location")}><option value="BLR">${CITY.BLR}</option><option value="HYD">${CITY.HYD}</option></select></${Field}>
-      </div>
-      <div class="grid2">
-        <${Field} label="From" id="f-start"><input id="f-start" type="date" value=${f.start} onInput=${(e) => setF(Object.assign({}, f, { start: e.target.value, end: f.end < e.target.value ? e.target.value : f.end }))} /></${Field}>
-        <${Field} label="To" id="f-end"><input id="f-end" type="date" value=${f.end} onInput=${set("end")} /></${Field}>
-      </div>
-      ${bad ? html`<${Alert} tone="bad"><p class="small">The end date is before the start date.</p></${Alert}>` : null}
-      <${Field} label="Status" id="f-status"><select id="f-status" value=${f.status} onChange=${set("status")}><option value="available">Available</option><option value="tentative">Tentative</option><option value="unavailable">Unavailable / away</option><option value="unknown">Not yet known</option></select></${Field}>
-      <${Field} label="Source" id="f-src" hint="Where these dates came from."><select id="f-src" value=${f.source} onChange=${set("source")}><option>Manual</option><option>Shared calendar</option><option>Imported</option></select></${Field}>
-      <button class="btn primary" disabled=${bad || !f.person} onClick=${() => onSave(Object.assign({}, f, { id: f.id || uid(), updatedAt: today, example: false }))}>Save</button>
-      ${item.id ? html`<${ConfirmButton} label="Delete" onConfirm=${() => onDelete(f.id)} />` : null}
-    </${Sheet}>`;
-  }
-
   // ------------------------------------------------------------ More: Rules & preferences
   const PTYPES = {
     monthlyMin: "Monthly minimum office days",
@@ -1165,7 +1108,17 @@
     fixedWfh: "Fixed work-from-home weekdays",
     requiredDate: "Required on-site date",
   };
-  const CATS = { holiday: "Holiday", "office-closed": "Office closed (work from home)", leave: "Leave", event: "Event", "business-travel": "Work trip", blackout: "No-travel date" };
+  const CATS = { holiday: "Holiday", "office-closed": "Office closed (work from home)", leave: "Leave", family: "Family time", event: "Event", "business-travel": "Work trip", blackout: "No-travel date" };
+  const FSTATUS = { available: ["ok", "Confirmed"], tentative: ["warn", "Tentative"], unavailable: ["bad", "Away"] };
+  // Older versions kept family dates in a separate list; move them into Holidays & leave.
+  function migrateFamily(s) {
+    if (!(s.family || []).length) return false;
+    s.calendar = (s.calendar || []).concat(
+      s.family.map((f) => ({ id: f.id || uid(), category: "family", label: f.person && !/^daughter$/i.test(f.person) ? f.person : "Family time", start: f.start, end: f.end && f.end !== f.start ? f.end : "", location: f.location || "BLR", status: f.status === "unknown" ? "tentative" : f.status || "available", example: !!f.example }))
+    );
+    s.family = [];
+    return true;
+  }
   function policyText(p) {
     if (p.type === "monthlyMin" || p.type === "weeklyMin") return `${p.value} days`;
     if (p.type === "requiredDate") return p.date ? fDay(p.date) : "date not set";
@@ -1199,7 +1152,7 @@
     const setW = (k, v) => setP("weights", Object.assign({}, p.weights, { [k]: v }));
     const SLIDERS = [
       ["trips", "Avoid trips", 2, 40],
-      ["daughter", `Time with daughter in ${CITY.BLR}"`, 0, 20],
+      ["daughter", `Family time in ${CITY.BLR}`, 0, 20],
       ["homeWeekend", `Weekends at home in ${CITY.HYD}"`, 0, 20],
       ["homeWeekday", "Weekdays at home", 0, 10],
       ["shortStay", `Avoid very short ${CITY.BLR} stays"`, 0, 20],
@@ -1284,20 +1237,20 @@
   }
 
   // ------------------------------------------------------------ More: holidays, leave, events
-  function ItemsScreen({ state, today, back, edit, openHelp }) {
-    const [cat, setCat] = useState("all");
+  function ItemsScreen({ state, today, back, edit, openHelp, initialCat }) {
+    const [cat, setCat] = useState(initialCat || "all");
     const list = (state.calendar || []).filter((i) => cat === "all" || i.category === cat).slice().sort((a, b) => a.start.localeCompare(b.start));
     const up = list.filter((i) => (i.end || i.start) >= today);
     const past = list.filter((i) => (i.end || i.start) < today).reverse();
     const Row = (i) => html`<button class="item" onClick=${() => edit(i)}><div class="stack grow">
-      <div class="row wrap"><strong class="small">${i.label || CATS[i.category]}</strong><span class="pill neutral">${CATS[i.category]}</span>${i.example ? html`<span class="pill info">Example</span>` : null}</div>
+      <div class="row wrap"><strong class="small">${i.label || CATS[i.category]}</strong><span class="pill neutral">${CATS[i.category]}</span>${i.category === "family" && FSTATUS[i.status || "available"] ? html`<span class=${"pill " + FSTATUS[i.status || "available"][0]}>${FSTATUS[i.status || "available"][1]}</span>` : null}${i.example ? html`<span class="pill info">Example</span>` : null}</div>
       <span class="small">${fDay(i.start)}${i.end && i.end !== i.start ? " – " + fDay(i.end) : ""}${i.location ? " · " + CITY[i.location] : ""}${i.mustAttend ? " · must attend" : ""}</span></div></button>`;
     return html`<div class="page">
       <button class="link back" onClick=${back}>${I.left}More</button>
       <div class="page-head head-row"><div class="stack" style="gap:4px"><span class="eyebrow">Calendar items</span><h1>Holidays, leave & events</h1></div><button class="btn small primary" onClick=${() => edit({ category: cat === "all" ? "holiday" : cat })}>${I.plus}Add</button></div>
       <${HelpLink} id="days" openHelp=${openHelp} label="Which type should I use?" />
       <select aria-label="Filter" value=${cat} onChange=${(e) => setCat(e.target.value)}><option value="all">All items</option>${Object.entries(CATS).map(([k, v]) => html`<option value=${k}>${v}</option>`)}</select>
-      ${up.length ? html`<div class="list">${up.map(Row)}</div>` : html`<div class="list"><div class="empty">Nothing upcoming. Add your company's holiday list, planned leave and family events.</div></div>`}
+      ${up.length ? html`<div class="list">${up.map(Row)}</div>` : html`<div class="list"><div class="empty">Nothing upcoming. Add your company's holiday list, leave, office-closed days and family time.</div></div>`}
       ${past.length ? html`<div class="section"><h3 class="muted">Past</h3><div class="list">${past.map(Row)}</div></div>` : null}
     </div>`;
   }
@@ -1307,16 +1260,19 @@
     const bad = i.end && i.end < i.start;
     return html`<${Sheet} title=${item.id ? "Edit item" : "Add " + CATS[i.category].toLowerCase()} onClose=${onClose}>
       <${Field} label="Type" id="i-cat"><select id="i-cat" value=${i.category} onChange=${set("category")}>${Object.entries(CATS).map(([k, v]) => html`<option value=${k}>${v}</option>`)}</select></${Field}>
-      <${Field} label="Label" id="i-label"><input id="i-label" type="text" value=${i.label} onInput=${set("label")} placeholder=${{ holiday: "e.g. Deepavali", "office-closed": "e.g. Wellness day", leave: "e.g. Annual leave", event: "e.g. Cousin's wedding", "business-travel": "e.g. Client visit, Pune", blackout: "e.g. Exam week" }[i.category]} /></${Field}>
+      <${Field} label="Label" id="i-label"><input id="i-label" type="text" value=${i.label} onInput=${set("label")} placeholder=${{ holiday: "e.g. Deepavali", "office-closed": "e.g. Wellness day", family: "e.g. Kids' school holidays", leave: "e.g. Annual leave", event: "e.g. Cousin's wedding", "business-travel": "e.g. Client visit, Pune", blackout: "e.g. Exam week" }[i.category]} /></${Field}>
       <div class="grid2">
         <${Field} label="From" id="i-start"><input id="i-start" type="date" value=${i.start} onInput=${set("start")} /></${Field}>
         <${Field} label="To" id="i-end" hint="Leave blank for one day"><input id="i-end" type="date" value=${i.end || ""} onInput=${set("end")} /></${Field}>
       </div>
       ${bad ? html`<${Alert} tone="bad"><p class="small">The end date is before the start date.</p></${Alert}>` : null}
+      ${i.category === "family" ? html`
+        <${Field} label="Where" id="i-floc" hint="The planner favours being in this city on these dates."><select id="i-floc" value=${i.location || "BLR"} onChange=${set("location")}><option value="BLR">${CITY.BLR}</option><option value="HYD">${CITY.HYD}</option></select></${Field}>
+        <${Field} label="Status" id="i-fst"><select id="i-fst" value=${i.status || "available"} onChange=${set("status")}><option value="available">Confirmed</option><option value="tentative">Tentative</option><option value="unavailable">Away (no family time there)</option></select></${Field}>` : null}
       ${i.category === "event" ? html`
         <${Field} label="Where" id="i-loc"><select id="i-loc" value=${i.location} onChange=${set("location")}><option value="">Anywhere / not location-bound</option><option value="BLR">${CITY.BLR}</option><option value="HYD">${CITY.HYD}</option></select></${Field}>
         <label class="check"><input type="checkbox" id="i-must" checked=${!!i.mustAttend} onChange=${(e) => setI(Object.assign({}, i, { mustAttend: e.target.checked }))} />I must be there (the planner will never schedule around it)</label>` : null}
-      <button class="btn primary" disabled=${!i.start || bad} onClick=${() => onSave(Object.assign({}, i, { id: i.id || uid(), end: i.end || "", example: false }))}>Save</button>
+      <button class="btn primary" disabled=${!i.start || bad} onClick=${() => onSave(Object.assign({}, i, { id: i.id || uid(), end: i.end || "", example: false }, i.category === "family" ? { location: i.location || "BLR", status: i.status || "available" } : {}))}>Save</button>
       ${item.id ? html`<${ConfirmButton} label="Delete" onConfirm=${() => onDelete(i.id)} />` : null}
     </${Sheet}>`;
   }
@@ -1404,7 +1360,7 @@
         <div class="btn-row"><button class="btn" onClick=${exportJSON}>Save backup</button><button class="btn" onClick=${() => fileRef.current && fileRef.current.click()}>Restore from backup</button></div>
         <input ref=${fileRef} id="restore-file" type="file" accept="application/json,.json" hidden onChange=${onFile} />
         ${pending ? html`<${Alert} tone="warn" title="Replace everything with this backup?"><p class="small">Backup from ${pending.exportedAt ? fDay(pending.exportedAt.slice(0, 10)) : "an unknown date"}. Your current data will be replaced.</p>
-          <div class="btn-row"><button class="btn small danger" onClick=${() => { replaceState(Object.assign(EMPTY(), pending.state)); setPending(null); toast("Backup restored"); }}>Replace my data</button><button class="btn small" onClick=${() => setPending(null)}>Cancel</button></div></${Alert}>` : null}
+          <div class="btn-row"><button class="btn small danger" onClick=${() => { { const r = Object.assign(EMPTY(), pending.state); migrateFamily(r); replaceState(r); } setPending(null); toast("Backup restored"); }}>Replace my data</button><button class="btn small" onClick=${() => setPending(null)}>Cancel</button></div></${Alert}>` : null}
       </div>
       <div class="card"><h3>Start over</h3><p class="small muted">Deletes all rules, plans, journeys and logs.</p><${ConfirmButton} label="Delete everything" onConfirm=${() => { replaceState(EMPTY()); toast("All data deleted"); }} /></div>
     </div>`;
@@ -1644,9 +1600,8 @@
     const comp = E.compliance(ymOf(today), state, acceptedPlan(state, ymOf(today)), today);
     const tiles = [
       ["compliance", I.gauge, "Compliance", `${comp.monthly.completed} of ${comp.monthly.required || "—"} office days`],
-      ["family", I.family, "Family", `${(state.family || []).filter((f) => f.end >= today).length} upcoming dates`],
       ["rules", I.rules, "Rules & preferences", `${(state.policies || []).filter((p) => p.active !== false).length} active rules`],
-      ["items", I.items, "Holidays & leave", `${(state.calendar || []).filter((i) => (i.end || i.start) >= today).length} upcoming`],
+      ["items", I.items, "Holidays, leave & family", `${(state.calendar || []).filter((i) => (i.end || i.start) >= today).length} upcoming`],
       ["reports", I.report, "Reports", "PDF for any month"],
       ["data", I.data, "Backup & data", "Save, restore, reset"],
       ["lock", I.lock, "App lock", (window.LSLock && LSLock.read()) ? "On · phone unlock" : "Off"],
@@ -1682,7 +1637,7 @@
     };
     return html`<div class="page">
       <div class="page-head"><span class="eyebrow">Welcome</span><h1>Set up LifeSync</h1>
-        <p class="small muted">Plan office days in ${CITY.BLR}, time at home in ${CITY.HYD} and time with your daughter, with fewer trips. Start with your office rule; everything can be changed later.</p>
+        <p class="small muted">Plan office days in ${CITY.BLR}, time at home in ${CITY.HYD} and family time, with fewer trips. Start with your office rule; everything can be changed later.</p>
         <${HelpLink} id="start" openHelp=${openHelp} label="Read the getting-started guide" /></div>
       <div class="card">
         <${Field} label="Your name (optional)" id="s-name"><input id="s-name" type="text" value=${name} onInput=${(e) => setName(e.target.value)} /></${Field}>
@@ -1698,7 +1653,7 @@
         <${Field} label="Where are you at the start of this month?" id="s-start"><select id="s-start" value=${start} onChange=${(e) => setStart(e.target.value)}><option value="HYD">${CITY.HYD}</option><option value="BLR">${CITY.BLR}</option></select></${Field}>
         <button class="btn primary block" onClick=${finish}>Save and start</button>
       </div>
-      <div class="card"><h3>Just looking?</h3><p class="small muted">Load a sample month with example rules, a holiday, your daughter's dates and a booked train, all clearly marked so you can remove them later.</p>
+      <div class="card"><h3>Just looking?</h3><p class="small muted">Load a sample month with example rules, a holiday, family time and a booked train, all clearly marked so you can remove them later.</p>
         <button class="btn block" onClick=${() => onDone(exampleState(today), true)}>Explore with example data</button></div>
     </div>`;
   }
@@ -1746,6 +1701,7 @@
         const s = Object.assign(EMPTY(), loaded);
         s.prefs = Object.assign({}, DEFAULT_PREFS, loaded.prefs || {});
         s.meta = Object.assign({ setupDone: false }, loaded.meta || {});
+        if (migrateFamily(s)) { st.save("calendar", s.calendar); st.save("family", s.family); }
         setStore(st);
         setState(s);
       });
@@ -1860,7 +1816,7 @@
     else if (tab === "calendar") body = html`<${CalendarScreen} state=${state} today=${today} month=${calMonth} setMonth=${setCalMonth} openDay=${openDay} />`;
     else if (tab === "travel") body = html`<${TravelScreen} state=${state} today=${today} openJourney=${openJourney} newJourney=${() => setSheet({ type: "journey", item: null })} openHelp=${openHelp} />`;
     else if (sub === "compliance") body = html`<${ComplianceScreen} state=${state} today=${today} back=${back} />`;
-    else if (sub === "family") body = html`<${FamilyScreen} state=${state} today=${today} back=${back} edit=${(f) => setSheet({ type: "family", item: f })} />`;
+    else if (sub === "family") body = html`<${ItemsScreen} state=${state} today=${today} back=${back} edit=${(i) => setSheet({ type: "item", item: i })} openHelp=${openHelp} initialCat="family" />`;
     else if (sub === "rules") body = html`<${RulesScreen} state=${state} update=${update} back=${back} toast=${toast} editPolicy=${(p) => setSheet({ type: "policy", item: p })} openHelp=${openHelp} />`;
     else if (sub === "items") body = html`<${ItemsScreen} state=${state} today=${today} back=${back} edit=${(i) => setSheet({ type: "item", item: i })} openHelp=${openHelp} />`;
     else if (sub === "reports") body = html`<${ReportsScreen} state=${state} today=${today} back=${back} toast=${toast} />`;
@@ -1878,8 +1834,6 @@
       sheetEl = html`<${DaySheet} state=${state} iso=${sheet.iso} today=${today} onClose=${close} setAttendance=${setAttendance} addItem=${addItem} openJourney=${openJourney} />`;
     if (sheet && sheet.type === "confirm")
       sheetEl = html`<${ConfirmSheet} state=${state} days=${sheet.days} today=${today} setAttendance=${setAttendance} onClose=${close} />`;
-    if (sheet && sheet.type === "family")
-      sheetEl = html`<${FamilySheet} item=${sheet.item} today=${today} onClose=${close} onSave=${(f) => { upsert("family", f); close(); toast("Availability saved"); }} onDelete=${(id) => { remove("family", id); close(); }} />`;
     if (sheet && sheet.type === "policy")
       sheetEl = html`<${PolicySheet} item=${sheet.item} onClose=${close} onSave=${(p) => { upsert("policies", p); close(); toast("Rule saved"); }} onDelete=${(id) => { remove("policies", id); close(); }} />`;
     if (sheet && sheet.type === "item")

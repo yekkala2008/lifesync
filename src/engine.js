@@ -286,7 +286,7 @@
   // ---------------------------------------------------------------- planner
   const DEFAULT_WEIGHTS = {
     trips: 10, // cost of one one-way journey
-    daughter: 6, // reward per evening/day in BLR overlapping daughter's availability
+    daughter: 6, // reward per day in the office city during "Family time" (key kept for saved settings)
     homeWeekend: 8, // reward per weekend day in the home city
     homeWeekday: 3, // reward per non-office weekday in the home city
     shortStay: 6, // penalty per night short of the minimum stay
@@ -301,8 +301,16 @@
     fewerTrips: { label: "Fewest trips", weights: { trips: 30, midweekTravel: 4 } },
   };
 
+  /** Family time: "Family time" items in Holidays & leave, plus the older
+   *  separate family list (kept so existing data and backups still work). */
+  function familyItems(state) {
+    const fromCal = (state.calendar || [])
+      .filter((c) => c.category === "family")
+      .map((c) => ({ person: c.label || "Family time", start: c.start, end: c.end || c.start, location: c.location || "BLR", status: c.status || "available" }));
+    return (state.family || []).concat(fromCal);
+  }
   function familyOn(state, iso, loc) {
-    return (state.family || []).filter(
+    return familyItems(state).filter(
       (f) => f.status !== "unavailable" && (f.location || "BLR") === loc && inRange(iso, f.start, f.end)
     );
   }
@@ -430,7 +438,7 @@
       if (loc === "BLR")
         for (const f of familyOn(state, d.date, "BLR")) s -= f.status === "tentative" ? w.daughter / 2 : w.daughter;
       if (loc === "HYD") {
-        const away = (state.family || []).some(
+        const away = familyItems(state).some(
           (f) => f.status === "unavailable" && (f.location || "BLR") === "HYD" && inRange(d.date, f.start, f.end)
         );
         if (!away) s -= isWeekend(d.date) || d.holiday ? w.homeWeekend : !office ? w.homeWeekday : 0;
@@ -585,10 +593,10 @@
 
   function metrics(plan, state) {
     const wfo = plan.days.filter((d) => d.mode === "wfo").length;
-    const daughterDays = plan.days.filter(
+    const familyDays = plan.days.filter(
       (d) => d.location === "BLR" && familyOn(state, d.date, "BLR").length > 0
     ).length;
-    const daughterWindow = plan.days.filter((d) => familyOn(state, d.date, "BLR").length > 0).length;
+    const familyWindow = plan.days.filter((d) => familyOn(state, d.date, "BLR").length > 0).length;
     const hydDays = plan.days.filter((d) => d.location === "HYD").length;
     const hydWeekends = plan.days.filter((d) => d.location === "HYD" && isWeekend(d.date)).length;
     const hol = plan.days.filter((d) => d.mode === "holiday" && !isWeekend(d.date));
@@ -600,8 +608,8 @@
     return {
       wfo,
       trips: plan.journeys.length,
-      daughterDays,
-      daughterWindow,
+      familyDays,
+      familyWindow,
       hydDays,
       weekdayHolidays: hol.length,
       closedDays: closedDays.length,
@@ -651,7 +659,7 @@
   function materialDifference(plans) {
     const a = plans.map((p) => p.metrics);
     const span = (f) => Math.max(...a.map(f)) - Math.min(...a.map(f));
-    return span((m) => m.trips) >= 2 || span((m) => m.daughterDays) >= 2 || span((m) => m.hydWeekends) >= 2;
+    return span((m) => m.trips) >= 2 || span((m) => m.familyDays) >= 2 || span((m) => m.hydWeekends) >= 2;
   }
 
   function explain(plan, state) {
@@ -683,8 +691,8 @@
           (plan.officeCityWfhWanted ? (m.cityWfh === plan.officeCityWfhWanted ? ` (you asked for ${plan.officeCityWfhWanted}).` : ` (you asked for at least ${plan.officeCityWfhWanted}).`) : ".")
       );
     lines.push(`${m.trips} one-way ${m.trips === 1 ? "journey" : "journeys"}.`);
-    if (m.daughterWindow)
-      lines.push(`In ${N.office} for ${m.daughterDays} of ${m.daughterWindow} days your daughter is available.`);
+    if (m.familyWindow)
+      lines.push(`In ${N.office} for ${m.familyDays} of ${m.familyWindow} family-time ${m.familyWindow === 1 ? "day" : "days"}.`);
     lines.push(`${m.hydWeekends} weekend ${m.hydWeekends === 1 ? "day" : "days"} at home in ${N.home}.`);
     if (m.weekdayHolidays)
       lines.push(
@@ -805,7 +813,7 @@
       policies: (state.policies || [])
         .filter((p) => touches(p.effectiveFrom || "0000-01-01", p.effectiveTo || "9999-12-31") && (p.type !== "requiredDate" || touches(p.date, p.date)))
         .map((p) => [p.type, p.value, p.weekdays, p.date, p.effectiveFrom, p.effectiveTo, p.active]),
-      calendar: (state.calendar || []).filter((c) => touches(c.start, c.end || c.start)).map((c) => [c.category, c.start, c.end, c.location, c.mustAttend]),
+      calendar: (state.calendar || []).filter((c) => touches(c.start, c.end || c.start)).map((c) => [c.category, c.start, c.end, c.location, c.mustAttend, c.status]),
       family: (state.family || []).filter((f) => touches(f.start, f.end)).map((f) => [f.person, f.start, f.end, f.status, f.location]),
       // Fixed trips in or just before this month that the plan doesn't already
       // contain. Booked, waitlisted, completed and "your date" all pin you the
@@ -861,6 +869,6 @@
     // travel
     STATUSES, journeyState, reminders,
     // replanning
-    inputsFingerprint, diffPlans, placeNames, officeCityWfhFor,
+    inputsFingerprint, diffPlans, placeNames, officeCityWfhFor, familyItems,
   };
 });

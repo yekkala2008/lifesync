@@ -13,10 +13,17 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.11.0",
+    version: "0.12.0",
     updated: "2026-10-12",
 
     whatsNew: [
+      {
+        version: "0.12.0",
+        items: [
+          "Family dates now live in <b>Holidays, leave &amp; family</b> as the <b>Family time</b> type. Your existing dates were moved there automatically.",
+          "The separate Family screen is gone, and plans talk about <i>family time</i> instead of a named person.",
+        ],
+      },
       {
         version: "0.11.0",
         items: [
@@ -116,11 +123,11 @@
         id: "start",
         title: "Getting started",
         body: `
-<p>LifeSync works out where you should be each day, Bengaluru or Hyderabad, so you meet your office rules with as few trips as possible and still get time with your daughter and family at home.</p>
+<p>LifeSync works out where you should be each day, Bengaluru or Hyderabad, so you meet your office rules with as few trips as possible and still get your family time and time at home.</p>
 <ol>
 <li>On the welcome screen, enter your office city and home city (Bengaluru and Hyderabad by default), then your office days per month and per week. Only use <b>fixed office weekdays</b> if your company requires specific days, such as every Wednesday.</li>
-<li>Add holidays, leave and office-closed days in <b>More → Holidays &amp; leave</b>.</li>
-<li>Add your daughter's dates in <b>More → Family</b>.</li>
+<li>Add holidays, leave and office-closed days in <b>More → Holidays, leave &amp; family</b>.</li>
+<li>Add family time (when you want to be in a city for family) in <b>More → Holidays, leave &amp; family</b>, type <b>Family time</b>.</li>
 <li>Add tickets you have already booked in <b>Travel</b>, with status <b>Booked</b>.</li>
 <li>Go to <b>Plan → Suggest plans</b>, pick one, and tap <b>Save plan</b>.</li>
 </ol>
@@ -158,7 +165,7 @@
 <li>A backup reminder every 30 days.</li>
 </ol>
 <p>Items disappear once they're done. When nothing needs you, it says <b>All done</b>.</p>
-<p><b>Today</b> shows where you should be, tonight's journey if any, booking actions, your office-day count and your daughter's upcoming dates.</p>
+<p><b>Today</b> shows where you should be, tonight's journey if any, booking actions, and your office-day count.</p>
 <p><b>In Bengaluru</b> you can work from the office or from home. Each day, tap <b>Office</b> or <b>Home</b> in <b>Log today</b>. Planning 12 office days doesn't stop you working from home on others.</p>
 <p><b>In Hyderabad</b> the day is logged as <b>Home</b> automatically. Change it only for <b>Leave</b> or a <b>Work trip</b>.</p>
 <p>Planned office days you haven't confirmed appear in <b>Action items</b> as <b>Confirm past office days</b>. Tap it to mark several at once. To change any other day, tap it in <b>Calendar</b>.</p>
@@ -184,11 +191,12 @@
         id: "days",
         title: "Holidays, office closed, leave and events",
         body: `
-<p>Add these in <b>More → Holidays &amp; leave → Add</b>, or tap a day in <b>Calendar</b>.</p>
+<p>Add these in <b>More → Holidays, leave &amp; family → Add</b>, or tap a day in <b>Calendar</b>.</p>
 <ul>
 <li><b>Holiday</b>: no work. Weekday holidays are spent at home in Hyderabad.</li>
 <li><b>Office closed (work from home)</b>: for wellness days and similar. You work, but from home in Hyderabad. Shown as a dashed <b>WFH</b> in Calendar.</li>
 <li><b>Leave</b>: your days off.</li>
+<li><b>Family time</b>: dates you'd like to be in a city for family. A preference, not a rule (see <b>Family time</b>).</li>
 <li><b>Event</b>: anything with a place. Tick <b>I must be there</b> and choose the city to pin you there that day.</li>
 <li><b>Work trip</b>: travel for work; not an office day unless you choose otherwise in Rules.</li>
 <li><b>No-travel date</b>: no journey will leave on that evening.</li>
@@ -197,11 +205,16 @@
       },
       {
         id: "family",
-        title: "Family availability",
+        title: "Family time",
         body: `
-<p>In <b>More → Family</b>, add when your daughter is free in Bengaluru, marked <b>Available</b> or <b>Tentative</b>. Plans favour being in Bengaluru on those dates, and each plan shows how many of them it covers, for example <i>3/4 daughter days covered</i>.</p>
-<p>You can also add someone in Hyderabad as <b>Unavailable / away</b>, and the planner won't count that weekend as home time.</p>
-<p class="tip">Only dates and a status are stored, never what anyone is doing.</p>`,
+<p>Add family time in <b>More → Holidays, leave &amp; family → Add</b> and choose the type <b>Family time</b>. Give it a label if you like (for example <i>Kids' school holidays</i>), the dates, the city, and a status:</p>
+<ul>
+<li><b>Confirmed</b>: plans favour being in that city on those dates.</li>
+<li><b>Tentative</b>: plans favour it a little less.</li>
+<li><b>Away</b>: family isn't there, so a weekend in that city doesn't count as home time.</li>
+</ul>
+<p>Each plan shows how many family-time days it covers, for example <i>3/4 family-time days covered</i>. To make family time matter more or less, move <b>Family time</b> in <b>Rules &amp; preferences → Planning priorities</b>.</p>
+<p class="tip">Unlike an Event marked <i>I must be there</i>, family time is a preference: office rules and booked tickets always come first.</p>`,
       },
       {
         id: "plan",
@@ -232,7 +245,7 @@
 </ol>
 <p>The month re-plans immediately around your change: office days, the return trip and the weekly and monthly checks. Your edits are listed under <b>Your changes</b>, with <b>Undo</b> and <b>Clear all</b>.</p>
 <p>If a change would break a rule, such as clashing with a booked ticket, it's refused with the reason and your plan stays as it was.</p>
-<p>When you <b>Save plan</b>, trips you set are marked <b>Your date</b> and stay fixed in future replans. No-travel evenings are saved in <b>Holidays &amp; leave</b>.</p>
+<p>When you <b>Save plan</b>, trips you set are marked <b>Your date</b> and stay fixed in future replans. No-travel evenings are saved in <b>Holidays, leave &amp; family</b>.</p>
 <p class="tip">Changing a proposed trip's date in <b>Travel</b> also fixes it as <b>Your date</b>.</p>`,
       },
       {
@@ -254,7 +267,7 @@
         id: "changes",
         title: "When something changes",
         body: `
-<p>If you add a holiday, change a rule, add your daughter's dates, or book a trip that isn't in the plan, <b>Today</b> shows <b>Your plan may be out of date</b>.</p>
+<p>If you add a holiday, change a rule, add family time, or book a trip that isn't in the plan, <b>Today</b> shows <b>Your plan may be out of date</b>.</p>
 <p>Tap <b>Review an updated plan</b> to see new options and a summary of what changes before anything is saved.</p>
 <p class="tip">Booking or completing a trip that the plan already suggested doesn't trigger this.</p>`,
       },
@@ -325,7 +338,7 @@
 <p><b>Why does a trip show the day before a holiday?</b><br>Trips are overnight. Leaving the evening before puts you at home for the whole holiday.</p>
 <p><b>The plan keeps me in Bengaluru on a holiday.</b><br>A booked ticket or a must-attend event in Bengaluru overrides the holiday-at-home setting.</p>
 <p><b>It says no plan can meet my rules.</b><br>Read the listed reasons; usually two rules clash, or a fixed trip blocks the only possible days. Change one and try again.</p>
-<p><b>Will renaming my cities delete anything?</b><br>No. Plans, trips and logged days stay; they just show the new names. Daughter dates and events set in the office city stay with the office city.</p>
+<p><b>Will renaming my cities delete anything?</b><br>No. Plans, trips and logged days stay; they just show the new names. Family time and events set in the office city stay with the office city.</p>
 <p><b>I can't find a setting.</b><br>Most settings are in <b>More → Rules &amp; preferences</b>; scroll down for <b>Travel</b> and <b>Planning priorities</b>.</p>`,
       },
     ],

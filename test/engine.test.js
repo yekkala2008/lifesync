@@ -507,3 +507,17 @@ test("a plan isn't marked out of date by trips in other months or by booking its
   s.journeys.push({ date: other, from: "BLR", to: "HYD", status: "booked" });
   assert.notEqual(E.inputsFingerprint("2026-10", s, oct), fp);
 });
+
+test("Family time in Holidays & leave pulls the plan to that city, like the old family list", () => {
+  const s = base({ policies: [{ type: "monthlyMin", value: 6 }] });
+  s.calendar.push({ category: "family", label: "Kids' holidays", location: "BLR", start: "2026-11-21", end: "2026-11-22", status: "available" });
+  const p = E.planMonth("2026-11", s, { weights: { daughter: 8 } });
+  assert.equal(p.days.filter((d) => ["2026-11-21", "2026-11-22"].includes(d.date) && d.location === "BLR").length, 2);
+  assert.equal(p.metrics.familyWindow, 2);
+  assert.ok(E.explain(p, s).some((t) => /2 of 2 family-time days/.test(t)));
+  assert.ok(!E.explain(p, s).join(" ").match(/daughter/i));
+  // changing its status marks the plan out of date
+  const fp = E.inputsFingerprint("2026-11", s, p);
+  s.calendar[0].status = "tentative";
+  assert.notEqual(E.inputsFingerprint("2026-11", s, p), fp);
+});

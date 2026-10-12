@@ -10,6 +10,12 @@ When you change what the app does or how it is used, in the same commit:
 
 `npm run build` fails if the help version or its `whatsNew` entry doesn't match `package.json`, so CI won't publish an app with stale help.
 
+When you **rename or remove** a screen, tile, button or term:
+- search `src/help.js` and `src/app.js` for every mention of the old name and update them all, not just the section you're editing;
+- add the old name to `RETIRED` in `test/help.test.js`, so it can never come back.
+
+`test/help.test.js` (run by `npm test` before every publish) fails if Help points to a **More →** tile that doesn't exist, or if Help or any screen still uses a retired name.
+
 ## Other rules
 
 - Planning and compliance logic lives in `src/engine.js` and must stay pure and unit-tested (`npm test`). Add a test for every rule change.

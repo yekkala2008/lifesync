@@ -62,7 +62,7 @@ The planner looks at every day of the month and decides where you are (Bengaluru
 
 **Hard rules (never traded away):** monthly and weekly minimums, fixed office weekdays, required on-site dates, fixed WFH weekdays, holidays, leave and work trips, must-attend events, booked, waitlisted or completed journeys, and no-travel dates. Weekday holidays are spent at home in Hyderabad, and office-closed days (Holidays & leave → type "Office closed (work from home)") are worked from home in Hyderabad, unless a ticket or must-attend event says otherwise (both switchable in Rules → Travel). If these can't all be met, the app lists which ones conflict instead of guessing.
 
-**Preferences (weighted, adjustable in Rules → Planning priorities):** fewer trips, time with your daughter when she's free in Bengaluru, weekends and weekdays at home, avoiding very short stays, travelling on preferred days.
+**Preferences (weighted, adjustable in Rules → Planning priorities):** fewer trips, family time (from Holidays, leave & family), weekends and weekdays at home, avoiding very short stays, travelling on preferred days.
 
 Before planning you can set how many days to work from home in the office city that month; every option plans at least that many on top of the office days. It produces up to three plans, always in this order: Balanced (recommended), Most home time, Fewest trips. It drops duplicates, lists each plan's suggested travel dates with a book-by date (every trip is overnight: leave in the evening, arrive next morning), explains each, and asks you to choose when they really differ. Tap any suggested trip to move it to another evening, keep it, or skip travel that evening; the month re-plans around your change, or explains which rule it would break. Trips you set are saved as "Your date" and stay fixed in later replans. Nothing is saved, booked or cancelled until you confirm.
 
@@ -83,14 +83,14 @@ These are settings, not assumptions baked into code (**More → Rules & preferen
 ## Known limits
 
 - No live ticket availability. You record bookings yourself; the app reminds you about booking windows, waitlists and departures. The "booking opens" window is a setting because operators change it.
-- Family availability is entered manually. Calendar import isn't built yet.
+- Family time is entered manually in Holidays, leave & family. Calendar import isn't built yet.
 - Data lives on one device unless you restore a backup elsewhere. Cloud sync can be added later (for example a free Supabase or Firebase tier) if you want it on two devices.
 - Not yet matched to Namiclad's design. Once Namiclad's code is reachable, its colours, type and navigation patterns can be applied through `src/styles.css` and the tab bar in `src/app.js`.
 
 ## What's next
 
 - Align the look and navigation with Namiclad.
-- Optional Google Calendar sync for holidays, leave and your daughter's shared calendar (with permission).
+- Optional Google Calendar sync for holidays, leave and family calendars (with permission).
 - Optional cloud sync.
 
 

@@ -1,0 +1,22 @@
+name: Check pull request
+# Runs on every pull request: tests, Help checks and a build.
+# It never publishes; publishing happens only from main (pages.yml).
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

@@ -13,10 +13,14 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.12.2",
-    updated: "2026-10-12",
+    version: "0.12.3",
+    updated: "2026-10-13",
 
     whatsNew: [
+      {
+        version: "0.12.3",
+        items: ["The gold signature and name are smaller, so they sit quietly at the bottom of each screen. Colours are unchanged."],
+      },
       {
         version: "0.12.2",
         items: ["Help's sharing steps now show placeholder access codes (<i>your-code-1, your-code-2</i>) instead of real-looking examples. Always choose your own codes."],

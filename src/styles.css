@@ -358,26 +358,28 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 /* signature (gold foil) */
 .signature { --gold: linear-gradient(115deg, #8a6420, #d8b25a 35%, #f3e2a6 50%, #c9a24a 65%, #7d5a1c);
   display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
-.sig-by { font-size: 10.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.sig-mark { width: min(250px, 66vw); aspect-ratio: 900 / 352; background: var(--gold); background-size: 200% 100%;
+.sig-by { font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.sig-mark { width: min(150px, 42vw); aspect-ratio: 900 / 352; background: var(--gold); background-size: 200% 100%;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-position: center; mask-position: center; }
-.sig-flourish { display: flex; align-items: center; gap: 10px; color: #b8923c; font-size: 10px; opacity: 0.75; }
-.sig-flourish i { width: 46px; height: 1px; background: currentColor; }
-.sig-name { font-family: "Cormorant Garamond", Georgia, "Times New Roman", serif; font-weight: 600; font-size: clamp(20px, 6.4vw, 25px); letter-spacing: 0.14em; text-transform: uppercase;
+.sig-flourish { display: flex; align-items: center; gap: 8px; color: #b8923c; font-size: 8px; opacity: 0.75; }
+.sig-flourish i { width: 30px; height: 1px; background: currentColor; }
+.sig-name { font-family: "Cormorant Garamond", Georgia, "Times New Roman", serif; font-weight: 600; font-size: clamp(14px, 4vw, 16px); letter-spacing: 0.14em; text-transform: uppercase;
   background: var(--gold); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1.15; padding: 0 2px; }
-.signature.compact .sig-mark { width: min(180px, 50vw); }
-.signature.compact .sig-name { font-size: clamp(16px, 5vw, 19px); }
-.signature.compact .sig-flourish i { width: 32px; }
+.signature.compact .sig-mark { width: min(104px, 30vw); }
+.signature.compact .sig-name { font-size: 11.5px; }
+.signature.compact .sig-by { font-size: 8.5px; }
+.signature.compact { gap: 2px; }
+.signature.compact .sig-flourish i { width: 20px; }
 :root[data-theme="dark"] .sig-mark { filter: drop-shadow(0 0 5px rgba(216, 178, 90, 0.4)); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sig-mark { filter: drop-shadow(0 0 5px rgba(216, 178, 90, 0.4)); } }
-.credit-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 8px 6px; }
+.credit-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px 4px; }
 @media (prefers-reduced-motion: no-preference) {
   .sig-mark, .sig-name { animation: sheen 7s ease-in-out infinite alternate; }
   @keyframes sheen { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
 }
 .tiny-link { font-size: 11.5px; }
 .small svg { width: 14px; height: 14px; vertical-align: -2px; }
-.app-credit { padding: 26px 16px 4px; max-width: 560px; margin: 0 auto; }
+.app-credit { padding: 16px 16px 4px; max-width: 560px; margin: 0 auto; }
 .app-credit:not(.full) { padding-top: 22px; opacity: 0.95; }
 
 /* action items */

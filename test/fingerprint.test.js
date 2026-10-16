@@ -9,7 +9,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const E = require("../src/engine.js");
 
-const KNOWN = { 3: "0791023e2797f5e9" };
+const KNOWN = { 3: "0791023e2797f5e9", 4: "8660da5312dd1ccb" };
 
 test("fingerprint calculation changes come with an FP_VERSION bump", () => {
   const s = fs.readFileSync(path.join(__dirname, "../src/engine.js"), "utf8");

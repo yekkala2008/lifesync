@@ -217,6 +217,7 @@ p { margin: 0; }
 .cell .mark.lv { background: var(--warn-soft); color: var(--warn); }
 .cell .mark.cls { background: var(--sunk); color: var(--muted); outline: 1px dashed var(--muted); outline-offset: -1px; }
 .cell .mark.done { background: var(--ok); color: #fff; }
+.cell .mark.trv { background: var(--info-soft); color: var(--info); outline: 1px dashed var(--info); outline-offset: -1px; }
 .cell .mark.home { background: var(--surface); color: var(--blr); outline: 1px solid var(--blr); outline-offset: -1px; }
 .cell .dots { display: flex; gap: 2px; position: absolute; right: 4px; bottom: 4px; }
 .cell .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }

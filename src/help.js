@@ -13,10 +13,19 @@
 (function (root) {
   "use strict";
   root.LSHelp = {
-    version: "0.12.3",
-    updated: "2026-10-13",
+    version: "0.13.0",
+    updated: "2026-10-16",
 
     whatsNew: [
+      {
+        version: "0.13.0",
+        items: [
+          "<b>Same-day trips.</b> Any trip can now be <b>Overnight</b> (leave in the evening, arrive next morning) or <b>Same day</b> (leave in the morning, arrive that evening). A same-day trip's date is a travel day, never an office day.",
+          "Switch a suggested trip in <b>Plan</b>: tap it and choose <b>Same day</b>. Set it on a booking in <b>Travel</b> under <b>When</b>.",
+          "Prefer travelling by day? Set <b>Rules &amp; preferences → Travel → Suggested journeys</b> to <b>Same day</b>.",
+          "Calendar marks travel days <b>TRV</b>. Your existing trips and plans stay overnight, exactly as they were.",
+        ],
+      },
       {
         version: "0.12.3",
         items: ["The gold signature and name are smaller, so they sit quietly at the bottom of each screen. Colours are unchanged."],
@@ -166,7 +175,7 @@
         body: `
 <p><b>Action items</b> at the top lists everything that needs you, most urgent first, each with one button that takes you to the fix:</p>
 <ol>
-<li>Urgent travel: an unconfirmed ticket, travel tonight or tomorrow, or a ticket to book within 3 days.</li>
+<li>Urgent travel: an unconfirmed ticket, travel today, tonight or tomorrow, or a ticket to book within 3 days.</li>
 <li>Office days at risk this month.</li>
 <li>A plan that's out of date, or a month with no plan.</li>
 <li>Past office days to confirm.</li>
@@ -177,12 +186,13 @@
 <li>A backup reminder every 30 days.</li>
 </ol>
 <p>Items disappear once they're done. When nothing needs you, it says <b>All done</b>.</p>
-<p><b>Today</b> shows where you should be, tonight's journey if any, booking actions, and your office-day count.</p>
+<p><b>Today</b> shows where you should be, today's journey if any, booking actions, and your office-day count. On a same-day trip it says <b>Travel day</b>.</p>
 <p><b>In Bengaluru</b> you can work from the office or from home. Each day, tap <b>Office</b> or <b>Home</b> in <b>Log today</b>. Planning 12 office days doesn't stop you working from home on others.</p>
 <p><b>In Hyderabad</b> the day is logged as <b>Home</b> automatically. Change it only for <b>Leave</b> or a <b>Work trip</b>.</p>
+<p>On a <b>travel day</b> (a same-day trip), nothing is logged automatically. Log <b>Home</b> if you worked on the way, or <b>Leave</b> if you took the day off.</p>
 <p>Planned office days you haven't confirmed appear in <b>Action items</b> as <b>Confirm past office days</b>. Tap it to mark several at once. To change any other day, tap it in <b>Calendar</b>.</p>
 <p>If you work from home on a planned office day and fall short, <b>Action items</b> shows <b>Need X more office days</b>. Tap <b>Review plan</b> and LifeSync fits the missing days into the rest of the month. If they can no longer fit, it tells you how many you can still reach instead.</p>
-<p class="tip">Only days logged as <b>Office</b> count. Your real total shows as it is, whether that's above or below the target. In Calendar, <b>DONE</b> means office and an outlined <b>WFH</b> means you worked from home in Bengaluru.</p>`,
+<p class="tip">Only days logged as <b>Office</b> count. Your real total shows as it is, whether that's above or below the target. In Calendar, <b>DONE</b> means office, an outlined <b>WFH</b> means you worked from home in Bengaluru, and <b>TRV</b> is a same-day travel day.</p>`,
       },
       {
         id: "rules",
@@ -211,7 +221,7 @@
 <li><b>Family time</b>: dates you'd like to be in a city for family. A preference, not a rule (see <b>Family time</b>).</li>
 <li><b>Event</b>: anything with a place. Tick <b>I must be there</b> and choose the city to pin you there that day.</li>
 <li><b>Work trip</b>: travel for work; not an office day unless you choose otherwise in Rules.</li>
-<li><b>No-travel date</b>: no journey will leave on that evening.</li>
+<li><b>No-travel date</b>: no travel that day, neither an overnight trip leaving that evening nor a same-day trip.</li>
 </ul>
 <p class="tip">To stop holidays or office-closed days pulling you to Hyderabad, untick them in <b>Rules &amp; preferences → Travel</b>.</p>`,
       },
@@ -240,7 +250,7 @@
 </ul>
 <p>Every option plans your office days <b>and</b> at least the work-from-home days you set. If they can't both fit, you're told how many working days are left so you can lower the number. Options that come out identical are shown once.</p>
 <p>Each option shows a strip of the month (green Bengaluru, ochre Hyderabad, dot = office day), the key numbers, its <b>Suggested travel</b> and a short explanation. Tap an option to select it, then <b>Use … plan</b>, check the summary and <b>Save plan</b>.</p>
-<p><b>Every trip is overnight.</b> <i>Tue 20 Oct · evening → arrive Wed 21</i> means you leave Tuesday evening and arrive Wednesday morning.</p>
+<p><b>Trips are overnight unless you choose same day.</b> <i>Tue 20 Oct · evening → arrive Wed 21</i> means you leave Tuesday evening and arrive Wednesday morning. <i>Sat 24 Oct · same day · arrive by evening</i> means you leave Saturday morning and arrive that evening. See <b>Overnight or same-day trips</b>.</p>
 <p>Office rules always come first. If they can't all be met, the app lists which rules clash instead of guessing.</p>
 <p>Set your <b>usual</b> number once in <b>More → Rules &amp; preferences → Work from home in Bengaluru</b>. Every month starts from it. Changing the number on the Plan screen applies to that month only; tap <b>Use usual</b> to go back.</p>
 <p>The number is saved per month. Changing it after saving a plan shows <b>Your plan may be out of date</b>, with an updated plan to review.</p>
@@ -253,12 +263,26 @@
 <ol>
 <li>In <b>Plan</b>, tap <b>Change travel dates</b> (or <b>Suggest plans</b>).</li>
 <li>Tap any trip in <b>Suggested travel</b>.</li>
-<li>Choose <b>Move trip</b> to another evening, <b>Keep</b> it as it is, or <b>Don't travel that evening</b>.</li>
+<li>Under <b>Change the trip</b>, choose <b>Overnight</b> or <b>Same day</b> and the day to <b>Travel on</b>, then tap <b>Travel …</b>. Or tap <b>Keep</b> to fix it as it is, or <b>Don't travel that day</b>.</li>
 </ol>
+<p>To turn a suggested overnight trip into a same-day trip on the morning after, pick <b>Same day</b> and the next day's date.</p>
 <p>The month re-plans immediately around your change: office days, the return trip and the weekly and monthly checks. Your edits are listed under <b>Your changes</b>, with <b>Undo</b> and <b>Clear all</b>.</p>
 <p>If a change would break a rule, such as clashing with a booked ticket, it's refused with the reason and your plan stays as it was.</p>
-<p>When you <b>Save plan</b>, trips you set are marked <b>Your date</b> and stay fixed in future replans. No-travel evenings are saved in <b>Holidays, leave &amp; family</b>.</p>
+<p>When you <b>Save plan</b>, trips you set are marked <b>Your date</b> and stay fixed in future replans. No-travel days are saved in <b>Holidays, leave &amp; family</b>.</p>
 <p class="tip">Changing a proposed trip's date in <b>Travel</b> also fixes it as <b>Your date</b>.</p>`,
+      },
+      {
+        id: "timing",
+        title: "Overnight or same-day trips",
+        body: `
+<p>Every trip is one of two kinds:</p>
+<ul>
+<li><b>Overnight</b>: leave in the evening, arrive the next morning. The day you leave can still be an office day.</li>
+<li><b>Same day</b>: leave in the morning, arrive that evening. That date is a <b>travel day</b>: it's never planned as an office day, and you end it in the city you travel to.</li>
+</ul>
+<p><b>For one trip:</b> in <b>Plan</b>, tap a suggested trip and choose <b>Same day</b>. For a ticket you've booked, open it in <b>Travel</b> and set <b>When</b>.</p>
+<p><b>For all suggestions:</b> set <b>More → Rules &amp; preferences → Travel → Suggested journeys</b>. With <b>Same day</b>, plans put trips on your <b>Preferred travel days</b>, usually weekends, so you don't lose office days.</p>
+<p class="tip">A same-day trip on a working day leaves one fewer day for the office that week. If your rules can't spare it, LifeSync tells you instead of saving a plan that breaks them.</p>`,
       },
       {
         id: "travel",
@@ -266,7 +290,7 @@
         body: `
 <p>Saved plans add their trips to <b>Travel</b> as <b>Proposed</b>. When you book, open the trip and set:</p>
 <ul>
-<li><b>Booked and confirmed</b>, with times, train or operator, PNR and cost;</li>
+<li><b>Booked and confirmed</b>, with <b>When</b> (<b>Overnight</b> or <b>Same day</b>), times, train or operator, PNR and cost;</li>
 <li><b>Waitlisted / not confirmed</b>, which keeps a warning until confirmed;</li>
 <li><b>Travel completed</b> after the journey;</li>
 <li><b>Changed / cancelled</b> if plans change.</li>
@@ -347,7 +371,7 @@
         title: "Common questions",
         body: `
 <p><b>Why does it want more office days than I expected?</b><br>Past office days you haven't logged count as not attended. Log them in <b>Calendar</b>. Also check <b>Fixed office weekdays</b>: every day selected there is mandatory.</p>
-<p><b>Why does a trip show the day before a holiday?</b><br>Trips are overnight. Leaving the evening before puts you at home for the whole holiday.</p>
+<p><b>Why does a trip show the day before a holiday?</b><br>Overnight trips leave the evening before, so you're at home for the whole holiday. A same-day trip would use up the holiday itself.</p>
 <p><b>The plan keeps me in Bengaluru on a holiday.</b><br>A booked ticket or a must-attend event in Bengaluru overrides the holiday-at-home setting.</p>
 <p><b>It says no plan can meet my rules.</b><br>Read the listed reasons; usually two rules clash, or a fixed trip blocks the only possible days. Change one and try again.</p>
 <p><b>Will renaming my cities delete anything?</b><br>No. Plans, trips and logged days stay; they just show the new names. Family time and events set in the office city stay with the office city.</p>

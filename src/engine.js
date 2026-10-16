@@ -293,6 +293,7 @@
     midweekTravel: 2, // penalty for travelling on a weeknight other than the preferred ones
     extraOffice: 0.5, // tiny penalty per office day above requirement (keeps plans lean)
     eventMiss: 25, // soft penalty for being away from a (non must-attend) located event
+    dayTravelWorkday: 4, // penalty for a same-day trip on a working day (prefer weekends)
   };
 
   const PROFILES = {
@@ -315,13 +316,29 @@
     );
   }
 
+  // ---- trip timing
+  // Overnight (default, also every trip saved before same-day trips existed):
+  //   leave on the evening of `date`, arrive the next morning.
+  // Same day ("day"): leave the morning of `date`, arrive that evening. That
+  //   day is spent travelling, so it can't be an office day.
+  const isDayTrip = (j) => !!j && j.timing === "day";
+  const timingOf = (j) => (isDayTrip(j) ? "day" : "overnight");
+  /** The first day you wake up in the destination city. */
+  const arrivalDate = (j) => (isDayTrip(j) ? j.date : addDays(j.date, 1));
+  /** The last day you spend in the city you leave. */
+  const lastDayBefore = (j) => (isDayTrip(j) ? addDays(j.date, -1) : j.date);
+  /** Identity of a trip: same date, direction and timing. */
+  const tripKey = (j) => `${j.date}|${j.from}|${j.to}|${timingOf(j)}`;
+
   /**
-   * Fixed journeys (booked, waitlisted) are hard facts: an overnight journey
-   * departing on date d from X to Y forces location(d)=X and location(d+1)=Y.
-   * Returns Map(date -> location).
+   * Fixed journeys (booked, waitlisted, completed, "your date") are hard facts.
+   * A trip from X to Y forces location(lastDayBefore)=X and
+   * location(arrivalDate)=Y; a same-day trip also rules out the office that day.
+   * Returns { forced: Map(date -> location), arrivals: Map(date -> trip), conflicts }.
    */
   function forcedLocations(state, ym) {
     const forced = new Map();
+    const arrivals = new Map();
     const conflicts = [];
     const locked = (state.journeys || []).filter((j) =>
       ["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled")
@@ -332,17 +349,21 @@
       forced.set(date, loc);
     };
     for (const j of locked) {
-      put(j.date, j.from, j);
-      put(addDays(j.date, 1), j.to, j);
+      put(lastDayBefore(j), j.from, j);
+      put(arrivalDate(j), j.to, j);
+      arrivals.set(arrivalDate(j), j);
     }
-    return { forced, conflicts };
+    return { forced, arrivals, conflicts };
   }
 
   /**
    * Plan one month with dynamic programming over days.
    *
    * Decision per day: where you are (BLR/HYD) and, on an eligible BLR workday,
-   * whether you go to the office. Travel happens overnight between two days.
+   * whether you go to the office. A move between day i-1 and day i is one
+   * journey: overnight (leaving the evening of day i-1) or same day (travelling
+   * during day i, which then can't be an office day). Fixed trips keep their own
+   * timing; suggested trips use prefs.travelTiming (default overnight).
    * Hard constraints (never traded away):
    *   - monthly and weekly minimums, as computed by requirements()
    *   - fixed office / required dates (must be WFO, so must be in BLR)
@@ -355,7 +376,7 @@
   function planMonth(ym, state, opts) {
     opts = opts || {};
     const prefs = Object.assign(
-      { startLocation: "HYD", minStayNights: 2, preferredTravelDays: [0, 5], endLocation: null, holidaysAtHome: true, closedDaysAtHome: true },
+      { startLocation: "HYD", minStayNights: 2, preferredTravelDays: [0, 5], endLocation: null, holidaysAtHome: true, closedDaysAtHome: true, travelTiming: "overnight" },
       state.prefs || {}
     );
     const w = Object.assign({}, DEFAULT_WEIGHTS, (state.prefs && state.prefs.weights) || {}, opts.weights || {});
@@ -363,7 +384,7 @@
     const req = requirements(ym, state, days);
     // Trips the user fixed while adjusting this plan count like booked ones.
     const pinned = (opts.pinTrips || []).map((j) => Object.assign({}, j, { status: "booked" }));
-    const { forced, conflicts: forcedConflicts } = forcedLocations(
+    const { forced, arrivals, conflicts: forcedConflicts } = forcedLocations(
       Object.assign({}, state, { journeys: (state.journeys || []).concat(pinned) }),
       ym
     );
@@ -374,8 +395,22 @@
         issues: [{ date: forcedConflicts[0].date, text: `That clashes with another fixed trip around ${forcedConflicts[0].date}: you'd need to be in both cities at once.` }],
         requirements: req,
       };
+    // A fixed same-day trip on a day you must be in the office can never work: say so plainly.
+    for (const [iso, j] of arrivals) {
+      const d = days.find((x) => x.date === iso);
+      if (!isDayTrip(j) || !d || !d.mustOffice || (opts.today && iso < opts.today) || (opts.fixedDays || {})[iso]) continue;
+      return {
+        feasible: false,
+        issues: [{ date: iso, text: `${iso} is a required office day, so you can't spend it travelling. Make it an overnight trip instead, or pick another day.` }],
+        requirements: req,
+      };
+    }
     const N = days.length;
     const LOCS = ["BLR", "HYD"];
+    const defaultTiming = prefs.travelTiming === "day" ? "day" : "overnight";
+    // How a move into day i would travel: a fixed trip's own timing, else the default.
+    const timingAt = days.map((d) => (arrivals.has(d.date) ? timingOf(arrivals.get(d.date)) : defaultTiming));
+    const travelDateAt = days.map((d, i) => (timingAt[i] === "day" ? d.date : i === 0 ? addDays(d.date, -1) : days[i - 1].date));
 
     const weekIdx = days.map((d) => req.weeks.findIndex((w2) => w2.start === weekStart(d.date)));
     const weekEnd = days.map((d, i) => i === N - 1 || weekIdx[i + 1] !== weekIdx[i]);
@@ -417,7 +452,7 @@
     const wanted = opts.officeCityWfh != null ? opts.officeCityWfh : officeCityWfhFor(state, ym);
     const hNeed = Math.max(0, Math.floor(Number(wanted || 0)) || 0);
     const HCAP = hNeed;
-    const isCityWfh = (i, loc, office) => loc === "BLR" && !office && days[i].workday && !days[i].business;
+    const isCityWfh = (i, loc, office, onTrip) => loc === "BLR" && !office && !onTrip && days[i].workday && !days[i].business;
     // state key: loc, month office count, week office count, nights in BLR (capped), office-city WFH days (capped)
     const key = (l, m, wc, s, h) => (((l * (MCAP + 1) + m) * (WCAP + 1) + wc) * (SCAP + 1) + s) * (HCAP + 1) + h;
     const decode = (kk) => {
@@ -432,9 +467,11 @@
     };
     const SIZE = 2 * (MCAP + 1) * (WCAP + 1) * (SCAP + 1) * (HCAP + 1);
 
-    function dayScore(i, loc, office) {
+    function dayScore(i, loc, office, onTrip) {
       const d = days[i];
       let s = office ? w.extraOffice : 0;
+      // A day spent travelling isn't time at home, and on a working day it costs you that day.
+      if (onTrip) return s + (d.workday ? w.dayTravelWorkday : 0);
       if (loc === "BLR")
         for (const f of familyOn(state, d.date, "BLR")) s -= f.status === "tentative" ? w.daughter / 2 : w.daughter;
       if (loc === "HYD") {
@@ -461,10 +498,11 @@
       if (prefs.closedDaysAtHome && d.closed && !d.holiday && !isWeekend(d.date) && !d.pinnedLocation && loc !== "HYD") return false;
       return true;
     }
-    function officeOK(i, loc, office) {
+    function officeOK(i, loc, office, onTrip) {
       const d = days[i];
       const fx = fixed[d.date];
       if (fx) return !!fx.office === office;
+      if (onTrip && office) return false; // travelling all day
       if (office) return loc === "BLR" && d.workday && !d.noOffice;
       return !d.mustOffice;
     }
@@ -484,8 +522,10 @@
       const nxt = new Float64Array(SIZE).fill(Infinity);
       const bk = new Int32Array(SIZE).fill(-1);
       const bo = new Uint8Array(SIZE);
-      const depDate = i === 0 ? addDays(days[0].date, -1) : days[i - 1].date;
-      const depBlackout = (i > 0 && days[i - 1].blackout) || noTravel.has(depDate);
+      const depDate = travelDateAt[i];
+      const depDay = depDate === days[i].date ? days[i] : i > 0 ? days[i - 1] : null;
+      const depBlackout = (depDay && depDay.blackout) || noTravel.has(depDate);
+      const dayTiming = timingAt[i] === "day";
       const newWeek = i === 0 || weekEnd[i - 1];
       for (let k = 0; k < SIZE; k++) {
         const c0 = cur[k];
@@ -505,13 +545,14 @@
             if (l === 0) tc += Math.max(0, SCAP - s) * w.shortStay;
             s2 = 0;
           } else s2 = l2 === 0 ? Math.min(SCAP, s + 1) : 0;
+          const onTrip = travel && dayTiming;
           for (let o = 0; o < 2; o++) {
             const office = o === 1;
-            if (!officeOK(i, LOCS[l2], office)) continue;
+            if (!officeOK(i, LOCS[l2], office, onTrip)) continue;
             const m2 = Math.min(MCAP, m + o);
             const wc2 = Math.min(WCAP, wcBase + o);
-            const h2 = Math.min(HCAP, h + (isCityWfh(i, LOCS[l2], office) ? 1 : 0));
-            const c = c0 + tc + dayScore(i, LOCS[l2], office);
+            const h2 = Math.min(HCAP, h + (isCityWfh(i, LOCS[l2], office, onTrip) ? 1 : 0));
+            const c = c0 + tc + dayScore(i, LOCS[l2], office, onTrip);
             const k2 = key(l2, m2, wc2, s2, h2);
             if (c < nxt[k2]) {
               nxt[k2] = c;
@@ -559,21 +600,25 @@
       k = backs[i].bk[k];
     }
 
-    const planDays = days.map((d, i) => ({
-      date: d.date,
-      location: locs[i],
-      mode: office[i] ? "wfo" : d.closed && d.workday ? "closed" : d.workday ? "wfh" : d.holiday ? "holiday" : d.leave ? "leave" : "off",
-    }));
-    const prevLoc = startLoc;
     const journeys = [];
-    let last = prevLoc;
+    const tripDay = new Array(N).fill(false);
+    let last = startLoc;
     for (let i = 0; i < N; i++) {
       if (locs[i] !== last) {
-        const dep = i === 0 ? addDays(days[0].date, -1) : days[i - 1].date;
-        journeys.push({ date: dep, from: last, to: locs[i] });
+        journeys.push({ date: travelDateAt[i], from: last, to: locs[i], timing: timingAt[i] });
+        if (timingAt[i] === "day") tripDay[i] = true;
       }
       last = locs[i];
     }
+    const planDays = days.map((d, i) => {
+      const pd = {
+        date: d.date,
+        location: locs[i],
+        mode: office[i] ? "wfo" : tripDay[i] && d.workday ? "travel" : d.closed && d.workday ? "closed" : d.workday ? "wfh" : d.holiday ? "holiday" : d.leave ? "leave" : "off",
+      };
+      if (tripDay[i]) pd.travelDay = true;
+      return pd;
+    });
     const result = {
       feasible: true,
       month: ym,
@@ -603,6 +648,8 @@
     const holidaysHome = hol.filter((d) => d.location === "HYD").length;
     const closedDays = plan.days.filter((d) => d.mode === "closed");
     const cityWfh = plan.days.filter((d) => d.location === "BLR" && (d.mode === "wfh" || d.mode === "closed")).length;
+    const dayTrips = plan.journeys.filter(isDayTrip).length;
+    const travelWorkdays = plan.days.filter((d) => d.mode === "travel").length;
     const closedHome = closedDays.filter((d) => d.location === "HYD").length;
     const cost = (state.prefs && state.prefs.tripCost) || 0;
     return {
@@ -618,6 +665,8 @@
       holidaysHome,
       hydWeekends,
       estCost: plan.journeys.length * cost,
+      dayTrips,
+      travelWorkdays,
     };
   }
 
@@ -643,7 +692,7 @@
         infeasible = p;
         continue;
       }
-      const sig = p.days.map((d) => d.location[0] + d.mode[2]).join("");
+      const sig = p.days.map((d) => d.location[0] + d.mode[2]).join("") + p.journeys.map(tripKey).join();
       if (seen.has(sig)) continue;
       seen.add(sig);
       p.profile = id;
@@ -690,7 +739,13 @@
         `${m.cityWfh} work-from-home ${m.cityWfh === 1 ? "day" : "days"} in ${N.office}` +
           (plan.officeCityWfhWanted ? (m.cityWfh === plan.officeCityWfhWanted ? ` (you asked for ${plan.officeCityWfhWanted}).` : ` (you asked for at least ${plan.officeCityWfhWanted}).`) : ".")
       );
-    lines.push(`${m.trips} one-way ${m.trips === 1 ? "journey" : "journeys"}.`);
+    const dt = m.dayTrips || 0;
+    lines.push(
+      `${m.trips} one-way ${m.trips === 1 ? "journey" : "journeys"}` +
+        (!dt ? "." : dt === m.trips ? `, all same day.` : `: ${m.trips - dt} overnight, ${dt} same day.`)
+    );
+    if (m.travelWorkdays)
+      lines.push(`${m.travelWorkdays} working ${m.travelWorkdays === 1 ? "day is" : "days are"} spent travelling, so no office ${m.travelWorkdays === 1 ? "that day" : "on those days"}.`);
     if (m.familyWindow)
       lines.push(`In ${N.office} for ${m.familyDays} of ${m.familyWindow} family-time ${m.familyWindow === 1 ? "day" : "days"}.`);
     lines.push(`${m.hydWeekends} weekend ${m.hydWeekends === 1 ? "day" : "days"} at home in ${N.home}.`);
@@ -805,9 +860,9 @@
   // count, so booking or completing a suggested trip doesn't make it stale.
   // Bump whenever the fingerprint calculation changes. Plans saved with an
   // older calculation are re-stamped on load instead of being flagged.
-  const FP_VERSION = 3;
+  const FP_VERSION = 4;
   function inputsFingerprint(ym, state, plan) {
-    const planTrips = new Set(((plan && plan.journeys) || []).map((j) => `${j.date}|${j.from}|${j.to}`));
+    const planTrips = new Set(((plan && plan.journeys) || []).map(tripKey));
     const monthStart = ym + "-01";
     const monthEnd = monthDays(ym).slice(-1)[0];
     const touches = (s, e) => !(e && e < monthStart) && !(s > monthEnd);
@@ -824,12 +879,12 @@
       journeys: (state.journeys || [])
         .filter((j) => j.date >= addDays(monthStart, -1) && j.date <= monthEnd)
         .filter((j) => ["booked", "waitlisted", "completed"].includes(j.status) || (j.locked && j.status !== "cancelled"))
-        .filter((j) => !planTrips.has(`${j.date}|${j.from}|${j.to}`))
-        .map((j) => [j.date, j.from, j.to])
+        .filter((j) => !planTrips.has(tripKey(j)))
+        .map((j) => [j.date, j.from, j.to, timingOf(j)])
         .sort((a, b) => a.join().localeCompare(b.join())),
       counting: state.counting || {},
       officeCityWfh: officeCityWfhFor(state, ym),
-      prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome, state.prefs.closedDaysAtHome] : null,
+      prefs: state.prefs ? [state.prefs.minStayNights, state.prefs.preferredTravelDays, state.prefs.weights, state.prefs.holidaysAtHome, state.prefs.closedDaysAtHome, state.prefs.travelTiming || "overnight"] : null,
     };
     const str = JSON.stringify(pick);
     let h = 2166136261;
@@ -850,7 +905,7 @@
       if (b.location !== d.location || b.mode !== d.mode)
         changes.push({ date: d.date, from: b, to: d });
     }
-    const key = (j) => `${j.date}|${j.from}|${j.to}`;
+    const key = tripKey;
     const bj = new Set((before ? before.journeys : []).map(key));
     const aj = new Set(after.journeys.map(key));
     return {
@@ -870,7 +925,7 @@
     // compliance
     compliance,
     // travel
-    STATUSES, journeyState, reminders,
+    STATUSES, journeyState, reminders, isDayTrip, timingOf, arrivalDate, lastDayBefore, tripKey,
     // replanning
     inputsFingerprint, FP_VERSION, diffPlans, placeNames, officeCityWfhFor, familyItems,
   };

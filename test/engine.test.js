@@ -521,3 +521,105 @@ test("Family time in Holidays & leave pulls the plan to that city, like the old 
   s.calendar[0].status = "tentative";
   assert.notEqual(E.inputsFingerprint("2026-11", s, p), fp);
 });
+
+// ---- same-day trips
+test("trips saved before same-day trips existed are overnight", () => {
+  const old = { date: "2026-11-17", from: "HYD", to: "BLR", status: "booked" };
+  assert.equal(E.timingOf(old), "overnight");
+  assert.equal(E.arrivalDate(old), "2026-11-18");
+  assert.equal(E.lastDayBefore(old), "2026-11-17");
+  assert.equal(E.tripKey(old), E.tripKey(Object.assign({}, old, { timing: "overnight" })));
+  const day = Object.assign({}, old, { timing: "day" });
+  assert.equal(E.arrivalDate(day), "2026-11-17");
+  assert.equal(E.lastDayBefore(day), "2026-11-16");
+  assert.notEqual(E.tripKey(day), E.tripKey(old));
+});
+
+test("a booked same-day trip: there by evening, and no office that day", () => {
+  const s = base({
+    policies: [{ type: "weeklyMin", value: 2 }],
+    journeys: [{ id: "j1", date: "2026-11-17", from: "HYD", to: "BLR", status: "booked", timing: "day" }], // Tuesday
+  });
+  const p = E.planMonth("2026-11", s);
+  assert.ok(p.feasible);
+  assert.equal(p.days.find((d) => d.date === "2026-11-16").location, "HYD");
+  const tue = p.days.find((d) => d.date === "2026-11-17");
+  assert.equal(tue.location, "BLR");
+  assert.equal(tue.mode, "travel");
+  assert.equal(tue.travelDay, true);
+  const j = p.journeys.find((x) => x.date === "2026-11-17");
+  assert.equal(j.timing, "day");
+  assert.equal(p.metrics.dayTrips, 1);
+  assert.equal(p.metrics.travelWorkdays, 1);
+  const why = E.explain(p, s).join(" ");
+  assert.match(why, /same day/);
+  assert.match(why, /1 working day is spent travelling/);
+});
+
+test("a same-day trip can't land on a required office day", () => {
+  const s = base({
+    policies: [{ type: "requiredDate", date: "2026-11-17" }],
+    journeys: [{ date: "2026-11-17", from: "HYD", to: "BLR", status: "booked", timing: "day" }],
+  });
+  const r = E.planMonth("2026-11", s);
+  assert.equal(r.feasible, false);
+  assert.match(r.issues[0].text, /2026-11-17 is a required office day, so you can't spend it travelling/);
+  // the same trip overnight the evening before is fine
+  s.journeys[0] = { date: "2026-11-16", from: "HYD", to: "BLR", status: "booked" };
+  assert.equal(E.planMonth("2026-11", s).feasible, true);
+});
+
+test("preferring same-day travel: suggested trips go by day, mostly at weekends, never on office days", () => {
+  const s = base({ policies: [{ type: "monthlyMin", value: 10 }, { type: "weeklyMin", value: 2 }] });
+  s.prefs.travelTiming = "day";
+  s.prefs.preferredTravelDays = [0, 6];
+  const p = E.planMonth("2026-11", s);
+  assert.ok(p.feasible);
+  assert.ok(p.journeys.length > 0);
+  for (const j of p.journeys) {
+    assert.equal(j.timing, "day");
+    const d = p.days.find((x) => x.date === j.date);
+    if (!d) continue; // trip before the month
+    assert.equal(d.location, j.to);
+    assert.notEqual(d.mode, "wfo");
+    assert.ok(d.travelDay);
+  }
+  assert.ok(wfoDays(p).length >= 10);
+  assert.ok(p.journeys.filter((j) => E.isWeekend(j.date)).length >= p.journeys.length - 1);
+});
+
+test("changing one suggested trip to same day re-plans around it", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }] });
+  const p0 = E.planMonth("2026-11", s);
+  const j0 = p0.journeys.find((j) => j.date >= "2026-11-05");
+  const pin = { date: E.arrivalDate(j0), from: j0.from, to: j0.to, timing: "day" };
+  const p1 = E.planMonth("2026-11", s, { pinTrips: [pin] });
+  assert.ok(p1.feasible);
+  const j1 = p1.journeys.find((j) => E.tripKey(j) === E.tripKey(pin));
+  assert.ok(j1, "the same-day trip is in the plan");
+  assert.equal(p1.days.find((d) => d.date === pin.date).location, pin.to);
+  assert.notEqual(p1.days.find((d) => d.date === pin.date).mode, "wfo");
+});
+
+test("a no-travel day blocks same-day trips that day too", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }] });
+  s.prefs.travelTiming = "day";
+  const sats = E.monthDays("2026-11").filter((d) => E.weekday(d) === 6 || E.weekday(d) === 0);
+  s.calendar = sats.map((d) => ({ category: "blackout", start: d }));
+  const p = E.planMonth("2026-11", s);
+  if (p.feasible) for (const j of p.journeys) assert.ok(!sats.includes(j.date), j.date);
+});
+
+test("switching a booked trip between overnight and same day makes the plan out of date", () => {
+  const s = base({ policies: [{ type: "weeklyMin", value: 2 }], journeys: [{ date: "2026-11-17", from: "HYD", to: "BLR", status: "booked" }] });
+  const p = E.planMonth("2026-11", s);
+  const fp = E.inputsFingerprint("2026-11", s, p);
+  s.journeys[0].timing = "overnight"; // explicit overnight is the same trip
+  assert.equal(E.inputsFingerprint("2026-11", s, p), fp);
+  s.journeys[0].timing = "day";
+  assert.notEqual(E.inputsFingerprint("2026-11", s, p), fp);
+  // and changing the usual way to travel does too
+  s.journeys[0].timing = "overnight";
+  s.prefs.travelTiming = "day";
+  assert.notEqual(E.inputsFingerprint("2026-11", s, p), fp);
+});

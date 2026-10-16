@@ -22,6 +22,9 @@ const RETIRED = [
   { term: /\bdaughters?\b/i, why: "the app no longer names a person; say 'family time'" },
   { term: /\bNext up\b/, why: "renamed to 'Upcoming journeys' / 'Action items'" },
   { term: /Most family time/, why: "the plan option is 'Most home time'" },
+  { term: /Every trip is overnight/, why: "trips can be overnight or same day" },
+  { term: /Don't travel that evening|Move to another evening|\bMove trip\b/, why: "the trip sheet now says 'Change the trip' and 'Don't travel that day'" },
+  { term: /No-travel evenings|Preferred departure days/, why: "renamed to 'No-travel days' / 'Preferred travel days'" },
   { term: /blue-mango|team-kite|green-lotus/i, why: "sample codes look real and could end up as someone's actual code; use your-code-1 placeholders" },
 ];
 

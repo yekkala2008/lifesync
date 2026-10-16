@@ -392,3 +392,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .action-rank { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 700 11.5px var(--f-mono); background: var(--sunk); color: var(--muted); margin-top: 1px; }
 .list.actions .btn-row { margin-top: 6px; }
 .list.actions .btn-row > .btn { flex: 0 0 auto; }
+
+/* Share travel plans */
+.share-preview { white-space: pre-wrap; word-break: break-word; font-family: var(--f-body, inherit); font-size: 13.5px; line-height: 1.5; background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0; max-height: 46vh; overflow: auto; }
+.trip-kind { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); }

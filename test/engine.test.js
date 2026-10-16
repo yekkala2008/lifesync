@@ -623,3 +623,29 @@ test("switching a booked trip between overnight and same day makes the plan out 
   s.prefs.travelTiming = "day";
   assert.notEqual(E.inputsFingerprint("2026-11", s, p), fp);
 });
+
+test("itinerary for sharing: stays between trips, same-day and overnight, unbooked flagged, cancelled left out", () => {
+  const s = base({
+    journeys: [
+      { date: "2026-10-18", from: "HYD", to: "BLR", status: "booked", depTime: "21:30", arrTime: "06:45" },
+      { date: "2026-10-22", from: "BLR", to: "HYD", status: "proposed", timing: "day" },
+      { date: "2026-10-25", from: "HYD", to: "BLR", status: "cancelled" },
+      { date: "2026-10-27", from: "HYD", to: "BLR", status: "waitlisted" },
+      { date: "2026-12-01", from: "BLR", to: "HYD", status: "booked" }, // outside the window
+    ],
+  });
+  const it = E.itinerary(s, "2026-10-16", "2026-11-15");
+  const view = it.map((x) => (x.kind === "stay" ? `${x.loc} ${x.start}..${x.end || ""}` : `${x.journey.from}>${x.journey.to} ${x.journey.date} ${x.booked ? "booked" : x.waitlisted ? "waitlisted" : "not booked"}`));
+  assert.deepEqual(view, [
+    "HYD 2026-10-16..2026-10-18", // leaves the evening of the 18th
+    "HYD>BLR 2026-10-18 booked",
+    "BLR 2026-10-19..2026-10-21", // same-day trip on the 22nd: last day in BLR is the 21st
+    "BLR>HYD 2026-10-22 not booked",
+    "HYD 2026-10-22..2026-10-27",
+    "HYD>BLR 2026-10-27 waitlisted",
+    "BLR 2026-10-28..",
+  ]);
+  // starting mid-stay: where the last trip left you
+  const later = E.itinerary(s, "2026-10-20", "2026-10-21");
+  assert.deepEqual(later.map((x) => x.kind + " " + x.loc), ["stay BLR"]);
+});

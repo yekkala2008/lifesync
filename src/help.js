@@ -21,9 +21,10 @@
         version: "0.13.0",
         items: [
           "<b>Same-day trips.</b> Any trip can now be <b>Overnight</b> (leave in the evening, arrive next morning) or <b>Same day</b> (leave in the morning, arrive that evening). A same-day trip's date is a travel day, never an office day.",
-          "Switch a suggested trip in <b>Plan</b>: tap it and choose <b>Same day</b>. Set it on a booking in <b>Travel</b> under <b>When</b>.",
+          "Switch a suggested trip in <b>Plan</b>: tap it and choose <b>Same day</b>. For a booking in <b>Travel</b>, enter <b>Arrives on</b> as on your ticket: the same date makes it a same-day trip, the next date overnight.",
           "Prefer travelling by day? Set <b>Rules &amp; preferences → Travel → Suggested journeys</b> to <b>Same day</b>.",
           "Calendar marks travel days <b>TRV</b>. Your existing trips and plans stay overnight, exactly as they were.",
+          "<b>Share travel plans</b> in <b>Travel</b>: a simple message for family and friends with where you'll be and when you leave and arrive. Send it on WhatsApp or anywhere.",
         ],
       },
       {
@@ -280,7 +281,7 @@
 <li><b>Overnight</b>: leave in the evening, arrive the next morning. The day you leave can still be an office day.</li>
 <li><b>Same day</b>: leave in the morning, arrive that evening. That date is a <b>travel day</b>: it's never planned as an office day, and you end it in the city you travel to.</li>
 </ul>
-<p><b>For one trip:</b> in <b>Plan</b>, tap a suggested trip and choose <b>Same day</b>. For a ticket you've booked, open it in <b>Travel</b> and set <b>When</b>.</p>
+<p><b>For one trip:</b> in <b>Plan</b>, tap a suggested trip and choose <b>Same day</b>. For a ticket you've booked, open it in <b>Travel</b> and enter <b>Leaves on</b> and <b>Arrives on</b> with the times from your ticket. Arriving on the same date makes it a same-day trip; arriving the next date makes it overnight.</p>
 <p><b>For all suggestions:</b> set <b>More → Rules &amp; preferences → Travel → Suggested journeys</b>. With <b>Same day</b>, plans put trips on your <b>Preferred travel days</b>, usually weekends, so you don't lose office days.</p>
 <p class="tip">A same-day trip on a working day leaves one fewer day for the office that week. If your rules can't spare it, LifeSync tells you instead of saving a plan that breaks them.</p>`,
       },
@@ -290,7 +291,7 @@
         body: `
 <p>Saved plans add their trips to <b>Travel</b> as <b>Proposed</b>. When you book, open the trip and set:</p>
 <ul>
-<li><b>Booked and confirmed</b>, with <b>When</b> (<b>Overnight</b> or <b>Same day</b>), times, train or operator, PNR and cost;</li>
+<li><b>Booked and confirmed</b>, with <b>Leaves on</b> / <b>Departs</b> and <b>Arrives on</b> / <b>Arrives</b> from your ticket, train or operator, PNR and cost;</li>
 <li><b>Waitlisted / not confirmed</b>, which keeps a warning until confirmed;</li>
 <li><b>Travel completed</b> after the journey;</li>
 <li><b>Changed / cancelled</b> if plans change.</li>
@@ -298,6 +299,19 @@
 <p><b>Booking due</b> appears once a trip is within your booking lead time (<b>Rules → Travel → Book this many days ahead</b>).</p>
 <p><b>Phone reminders:</b> in a trip, tap <b>Booking reminder</b> or <b>Departure in calendar</b> to add it to Google Calendar. Your phone's calendar then alerts you even when LifeSync is closed.</p>
 <p class="tip">LifeSync never books, cancels or changes tickets, and doesn't check live seat availability.</p>`,
+      },
+      {
+        id: "sharetravel",
+        title: "Sharing your travel plans",
+        body: `
+<p>To let family or friends know where you'll be, open <b>Travel</b> and tap <b>Share</b>.</p>
+<ol>
+<li>Choose the period: <b>2 weeks</b>, <b>30 days</b>, this month or next month.</li>
+<li>Check the preview: which city you're in between trips, and each trip with the day and time you leave and arrive.</li>
+<li>Tap <b>Share</b> to send it on WhatsApp, SMS or email, or <b>Copy message</b> to paste it anywhere.</li>
+</ol>
+<p>Every trip that isn't cancelled is included. Trips you haven't booked yet say <i>not booked yet</i>, and waitlisted ones say <i>waitlisted</i>. Without times, it says <i>evening</i> and <i>morning</i> for overnight trips, or <i>morning</i> and <i>evening</i> for same-day trips.</p>
+<p class="tip">Only where you'll be and when you travel is shared. Office days, booking references (PNR) and costs are never included. The message is a snapshot, so share it again after plans change.</p>`,
       },
       {
         id: "changes",

@@ -1037,16 +1037,76 @@
     </${Sheet}>`;
   }
 
+  // ------------------------------------------------------------ Share travel plans
+  // A plain message for family and friends: where you'll be and when you travel.
+  // Nothing about office days, bookings references or costs.
+  const MODE_ICON = { train: "🚆", bus: "🚌", flight: "✈️", car: "🚗" };
+  function travelText(state, from, to) {
+    const name = ((state.prefs && state.prefs.name) || "").trim();
+    const out = [name ? `${name}'s travel plans` : "Travel plans", `${fDay(from)} – ${fDay(to)}`, ""];
+    const it = E.itinerary(state, from, to);
+    for (const x of it) {
+      if (x.kind === "stay") {
+        const city = CITY[x.loc];
+        const when = !x.end ? (x.start === from ? "The whole time" : `From ${fDay(x.start)}`)
+          : x.start === x.end ? fDay(x.start)
+          : x.start === from ? `Until ${fDay(x.end)}`
+          : `${fDay(x.start)} – ${fDay(x.end)}`;
+        out.push(`📍 ${when}: ${city}`);
+      } else {
+        const j = x.journey;
+        const day = dayTrip(j);
+        const dep = `${fDay(j.date)}, ${j.depTime || (day ? "morning" : "evening")}`;
+        const arr = day ? `${j.arrTime || "evening"} (same day)` : `${fDay(E.arrivalDate(j))}, ${j.arrTime || "morning"}`;
+        const tag = x.booked ? "" : x.waitlisted ? " · waitlisted" : " · not booked yet";
+        out.push(`${MODE_ICON[j.mode] || "🧳"} ${dep} → ${arr}${tag}`);
+        out.push(`    ${CITY[j.from]} → ${CITY[j.to]}${j.mode ? " · " + cap(j.mode) : ""}`);
+      }
+    }
+    if (!it.some((x) => x.kind === "trip")) out.push("No trips planned in this period.");
+    return out.join("\n");
+  }
+
+  function ShareTravelSheet({ state, today, onClose, toast }) {
+    const ym = ymOf(today);
+    const nextYm = addMonths(ym, 1);
+    const [period, setPeriod] = useState("30");
+    const range = period === "14" ? [today, E.addDays(today, 13)]
+      : period === "30" ? [today, E.addDays(today, 29)]
+      : period === "this" ? [today, E.monthDays(ym).slice(-1)[0]]
+      : [nextYm + "-01", E.monthDays(nextYm).slice(-1)[0]];
+    const text = travelText(state, range[0], range[1]);
+    const copy = () => {
+      try { navigator.clipboard.writeText(text).then(() => toast("Travel plans copied"), () => toast("Select the text and copy it")); } catch (e) { toast("Select the text and copy it"); }
+    };
+    const canShare = typeof navigator !== "undefined" && !!navigator.share;
+    const share = async () => {
+      try { await navigator.share({ title: text.split("\n")[0], text }); }
+      catch (e) { if (!e || e.name !== "AbortError") copy(); }
+    };
+    return html`<${Sheet} title="Share travel plans" onClose=${onClose}>
+      <p class="small muted">A simple message for family and friends: where you'll be, and when you leave and arrive.</p>
+      <${Seg} label="Period" value=${period} onChange=${(v) => v && setPeriod(v)} options=${[["14", "2 weeks"], ["30", "30 days"], ["this", fMonthShort(ym)], ["next", fMonthShort(nextYm)]]} />
+      <pre class="share-preview" aria-label="Message preview">${text}</pre>
+      <div class="btn-row">
+        ${canShare ? html`<button class="btn primary" onClick=${share}>${I.share}Share</button>` : null}
+        <button class=${"btn" + (canShare ? "" : " primary")} onClick=${copy}>Copy message</button>
+      </div>
+      <p class="tiny muted">Includes every trip that isn't cancelled; ones you haven't booked say <i>not booked yet</i>. No office days, booking references or costs.</p>
+    </${Sheet}>`;
+  }
+
   // ------------------------------------------------------------ screens: Travel
-  function TravelScreen({ state, today, openJourney, newJourney, openHelp }) {
+  function TravelScreen({ state, today, openJourney, newJourney, openHelp, toast }) {
     const [tab, setTab] = useState("upcoming");
+    const [sharing, setSharing] = useState(false);
     const js = (state.journeys || []).slice().sort((a, b) => a.date.localeCompare(b.date));
     const upcoming = js.filter((j) => j.date >= E.addDays(today, -1) && !["completed", "cancelled"].includes(j.status));
     const past = js.filter((j) => !upcoming.includes(j)).reverse();
     const list = tab === "upcoming" ? upcoming : past;
     return html`<div class="page">
       <div class="page-head head-row"><div class="stack" style="gap:4px"><span class="eyebrow">Travel</span><h1>Journeys</h1></div>
-        <button class="btn small primary" onClick=${newJourney}>${I.plus}Add</button></div>
+        <div class="row" style="gap:8px"><button class="btn small" onClick=${() => setSharing(true)}>${I.share}Share</button><button class="btn small primary" onClick=${newJourney}>${I.plus}Add</button></div></div>
       <${Seg} label="Show" value=${tab} onChange=${(v) => v && setTab(v)} options=${[["upcoming", `Upcoming (${upcoming.length})`], ["past", `Past & cancelled (${past.length})`]]} />
       ${list.length ? html`<div class="list">${list.map((j) => {
         const s = E.journeyState(j, today, state.prefs);
@@ -1058,6 +1118,7 @@
       })}</div>` : html`<div class="list"><div class="empty">${tab === "upcoming" ? "No upcoming journeys. Save a plan to get proposed journeys, or add one you've booked." : "Nothing here yet."}</div></div>`}
       <${HelpLink} id="travel" openHelp=${openHelp} label="How bookings and reminders work" />
       <p class="tiny muted">LifeSync doesn't check live seat availability. Record what you booked, and it reminds you about booking dates, waitlists and departures.</p>
+      ${sharing ? html`<${ShareTravelSheet} state=${state} today=${today} toast=${toast} onClose=${() => setSharing(false)} />` : null}
     </div>`;
   }
 
@@ -1070,23 +1131,32 @@
     const moved = journey && journey.id && (journey.date !== j.date || journey.from !== j.from || E.timingOf(journey) !== E.timingOf(j));
     const arrDate = day ? j.date : j.arrTime && j.depTime && j.arrTime < j.depTime ? E.addDays(j.date, 1) : j.date;
     const badTimes = day && j.depTime && j.arrTime && j.arrTime <= j.depTime;
+    // Arrival date decides the trip type: same date = same day, next date = overnight.
+    const [arrBad, setArrBad] = useState(null);
+    const setArrOn = (v) => {
+      if (v === j.date) { setArrBad(null); setJ(Object.assign({}, j, { timing: "day" })); }
+      else if (v === E.addDays(j.date, 1)) { setArrBad(null); setJ(Object.assign({}, j, { timing: "overnight" })); }
+      else setArrBad(v || "?");
+    };
+    const setLeaveOn = (v) => { setArrBad(null); setJ(Object.assign({}, j, { date: v })); };
     return html`<${Sheet} title=${isNew ? "Add journey" : journeyLabel(j)} onClose=${onClose}>
       <div class="grid2">
         <${Field} label="From" id="j-from"><select id="j-from" value=${j.from} onChange=${(e) => setJ(Object.assign({}, j, { from: e.target.value, to: other(e.target.value) }))}><option value="HYD">${CITY.HYD}</option><option value="BLR">${CITY.BLR}</option></select></${Field}>
         <${Field} label="To" id="j-to"><select id="j-to" value=${j.to} onChange=${(e) => setJ(Object.assign({}, j, { to: e.target.value, from: other(e.target.value) }))}><option value="BLR">${CITY.BLR}</option><option value="HYD">${CITY.HYD}</option></select></${Field}>
       </div>
       <div class="grid2">
-        <${Field} label="Travel date" id="j-date"><input id="j-date" type="date" value=${j.date} onInput=${set("date")} /></${Field}>
-        <${Field} label="Mode" id="j-mode"><select id="j-mode" value=${j.mode} onChange=${set("mode")}><option value="train">Train</option><option value="bus">Bus</option><option value="flight">Flight</option><option value="car">Car</option></select></${Field}>
-      </div>
-      <div class="field"><span class="label">When</span>
-        <${Seg} label="When" value=${E.timingOf(j)} onChange=${(v) => v && setJ(Object.assign({}, j, { timing: v }))} options=${[["overnight", "Overnight"], ["day", "Same day"]]} />
-        <span class="hint">${day ? "Leave in the morning, arrive the same evening. That day isn't an office day." : "Leave in the evening, arrive the next morning."}</span></div>
-      <div class="grid2">
+        <${Field} label="Leaves on" id="j-date"><input id="j-date" type="date" value=${j.date} onInput=${(e) => setLeaveOn(e.target.value)} /></${Field}>
         <${Field} label="Departs" id="j-dep"><input id="j-dep" type="time" value=${j.depTime} onInput=${set("depTime")} /></${Field}>
-        <${Field} label="Arrives" id="j-arr" hint=${day ? "Same day" : arrDate !== j.date ? "Next morning" : ""}><input id="j-arr" type="time" value=${j.arrTime} onInput=${set("arrTime")} /></${Field}>
       </div>
-      ${badTimes ? html`<${Alert} tone="warn"><p class="small">A same-day trip has to arrive after it leaves. Check the times, or choose <b>Overnight</b>.</p></${Alert}>` : null}
+      <div class="grid2">
+        <${Field} label="Arrives on" id="j-arron"><input id="j-arron" type="date" min=${j.date} max=${E.addDays(j.date, 1)} value=${arrBad && arrBad !== "?" ? arrBad : E.arrivalDate(j)} onInput=${(e) => setArrOn(e.target.value)} /></${Field}>
+        <${Field} label="Arrives" id="j-arr"><input id="j-arr" type="time" value=${j.arrTime} onInput=${set("arrTime")} /></${Field}>
+      </div>
+      ${arrBad
+        ? html`<${Alert} tone="warn"><p class="small">Arrival has to be the same day you leave or the next day.</p></${Alert}>`
+        : html`<span class="small trip-kind"><span class="pill neutral">${day ? "Same day" : "Overnight"}</span> ${day ? "That day is a travel day, not an office day." : "The day you arrive can be an office day."}</span>`}
+      <${Field} label="Mode" id="j-mode"><select id="j-mode" value=${j.mode} onChange=${set("mode")}><option value="train">Train</option><option value="bus">Bus</option><option value="flight">Flight</option><option value="car">Car</option></select></${Field}>
+      ${badTimes ? html`<${Alert} tone="warn"><p class="small">A same-day trip has to arrive after it leaves. Check the times, or set <b>Arrives on</b> to the next day.</p></${Alert}>` : null}
       <${Field} label="Status" id="j-status"><select id="j-status" value=${j.status} onChange=${set("status")}>
         <option value="proposed">Proposed (idea, not booked)</option><option value="booked">Booked and confirmed</option><option value="waitlisted">Waitlisted / not confirmed</option><option value="completed">Travel completed</option><option value="cancelled">Changed / cancelled</option></select></${Field}>
       ${s.action ? html`<${Alert} tone=${s.status === "waitlisted" || s.status === "booking-due" ? "warn" : "info"}><p class="small">${prettyDates(s.action)}</p></${Alert}>` : null}
@@ -1103,7 +1173,7 @@
           ${j.status === "proposed" ? html`<a class="btn small" target="_blank" rel="noopener" href=${gcalLink(`Book ticket: ${journeyLabel(j)}`, `Journey on ${fDay(j.date)}. Book by ${fDay(s.bookBy)}.`, s.bookBy, null, true)}>Booking reminder</a>` : null}
           <a class="btn small" target="_blank" rel="noopener" href=${j.depTime ? gcalLink(`${journeyLabel(j)}${j.ref ? " · PNR " + j.ref : ""}`, [j.operator, j.notes].filter(Boolean).join("\n"), { date: j.date, time: j.depTime }, { date: arrDate, time: j.arrTime || j.depTime }) : gcalLink(journeyLabel(j), "", j.date, null, true)}>Departure in calendar</a>
         </div></div>` : null}
-      <div class="btn-row"><button class="btn primary" onClick=${() => onSave(Object.assign({}, j, { id: j.id || uid(), timing: E.timingOf(j), cost: j.cost === "" ? "" : Number(j.cost), locked: j.status === "proposed" ? !!(j.locked || moved || isNew) : j.locked }))}>${isNew ? "Add journey" : "Save changes"}</button></div>
+      <div class="btn-row"><button class="btn primary" disabled=${!!arrBad} onClick=${() => onSave(Object.assign({}, j, { id: j.id || uid(), timing: E.timingOf(j), cost: j.cost === "" ? "" : Number(j.cost), locked: j.status === "proposed" ? !!(j.locked || moved || isNew) : j.locked }))}>${isNew ? "Add journey" : "Save changes"}</button></div>
       ${!isNew ? html`<${ConfirmButton} label="Delete journey" onConfirm=${() => onDelete(j.id)} />` : null}
     </${Sheet}>`;
   }
@@ -1864,7 +1934,7 @@
     else if (tab === "today") body = html`<${Today} state=${state} today=${today} go=${go} openJourney=${openJourney} setAttendance=${setAttendance} openDay=${openDay} openConfirm=${openConfirm} />`;
     else if (tab === "plan") body = html`<${PlanScreen} state=${state} today=${today} month=${planMonth} setMonth=${setPlanMonth} acceptPlan=${acceptPlan} go=${go} autoRun=${planAuto} clearAutoRun=${() => setPlanAuto(false)} openHelp=${openHelp} setCityWfh=${(ym, n) => { const m = Object.assign({}, state.prefs.officeCityWfh); if (n == null) delete m[ym]; else m[ym] = n; update("prefs", Object.assign({}, state.prefs, { officeCityWfh: m })); }} />`;
     else if (tab === "calendar") body = html`<${CalendarScreen} state=${state} today=${today} month=${calMonth} setMonth=${setCalMonth} openDay=${openDay} />`;
-    else if (tab === "travel") body = html`<${TravelScreen} state=${state} today=${today} openJourney=${openJourney} newJourney=${() => setSheet({ type: "journey", item: null })} openHelp=${openHelp} />`;
+    else if (tab === "travel") body = html`<${TravelScreen} state=${state} today=${today} openJourney=${openJourney} newJourney=${() => setSheet({ type: "journey", item: null })} openHelp=${openHelp} toast=${toast} />`;
     else if (sub === "compliance") body = html`<${ComplianceScreen} state=${state} today=${today} back=${back} />`;
     else if (sub === "family") body = html`<${ItemsScreen} state=${state} today=${today} back=${back} edit=${(i) => setSheet({ type: "item", item: i })} openHelp=${openHelp} initialCat="family" />`;
     else if (sub === "rules") body = html`<${RulesScreen} state=${state} update=${update} back=${back} toast=${toast} editPolicy=${(p) => setSheet({ type: "policy", item: p })} openHelp=${openHelp} />`;

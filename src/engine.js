@@ -854,6 +854,31 @@
     return out.sort((a, b) => a.priority - b.priority || a.journey.date.localeCompare(b.journey.date));
   }
 
+  /**
+   * Where you'll be and when you travel, for sharing with family: stays in each
+   * city and the trips between them, for trips departing within [from, to].
+   * Cancelled trips are left out; unbooked ones are flagged (`booked: false`).
+   * Uses your trips, not office days, so nothing about work is included.
+   * Returns [{ kind: "stay", loc, start, end|null }, { kind: "trip", journey, booked }].
+   */
+  function itinerary(state, from, to) {
+    const all = (state.journeys || []).filter((j) => j.status !== "cancelled").slice().sort((a, b) => a.date.localeCompare(b.date) || timingOf(a).localeCompare(timingOf(b)));
+    const trips = all.filter((j) => j.date >= from && j.date <= to);
+    const before = all.filter((j) => arrivalDate(j) <= from && !trips.includes(j)).pop();
+    let loc = before ? before.to : trips.length ? trips[0].from : (state.prefs && state.prefs.startLocation) || null;
+    let since = from;
+    const out = [];
+    for (const j of trips) {
+      const leave = lastDayBefore(j);
+      if (loc && leave >= since) out.push({ kind: "stay", loc, start: since, end: leave });
+      out.push({ kind: "trip", journey: j, booked: ["booked", "completed"].includes(j.status), waitlisted: j.status === "waitlisted" });
+      loc = j.to;
+      since = arrivalDate(j);
+    }
+    if (loc && since <= to) out.push({ kind: "stay", loc, start: since, end: null });
+    return out;
+  }
+
   // ---------------------------------------------------------------- replanning
   /** Stable fingerprint of everything that can change a plan for a month. */
   // `plan` (optional): fixed journeys that match the plan's own trips don't
@@ -925,7 +950,7 @@
     // compliance
     compliance,
     // travel
-    STATUSES, journeyState, reminders, isDayTrip, timingOf, arrivalDate, lastDayBefore, tripKey,
+    STATUSES, journeyState, reminders, itinerary, isDayTrip, timingOf, arrivalDate, lastDayBefore, tripKey,
     // replanning
     inputsFingerprint, FP_VERSION, diffPlans, placeNames, officeCityWfhFor, familyItems,
   };

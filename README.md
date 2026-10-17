@@ -21,7 +21,13 @@ LifeSync then opens full-screen from its icon and works offline.
 
 ## Updating the app
 
-Edit files in `src/`, **update the in-app help in `src/help.js`** (affected sections plus a `whatsNew` entry), bump `version` in both `package.json` and `src/help.js` (this also refreshes the offline cache), commit and push. The build fails if the help version doesn't match, so stale help can't be published. See `CLAUDE.md`. The workflow redeploys; the installed app picks up the new version the next time it opens with a connection.
+`main` is protected: every change goes through a pull request, and the **test** check (`.github/workflows/ci.yml`) must pass before it can be merged. Merging publishes the app (`.github/workflows/pages.yml`); installed phones pick up the new version the next time LifeSync opens with a connection.
+
+1. Branch from an up-to-date `main` (`git switch -c feature/<name>`).
+2. Edit `src/`, **update the in-app help in `src/help.js`** (affected sections plus a `whatsNew` entry), and bump `version` in both `package.json` and `src/help.js` (this also refreshes the offline cache). The build fails if they don't match.
+3. `npm test` and `npm run build`, then push the branch and open a pull request.
+
+With Claude Code (in VS Code, the desktop app, the terminal or claude.ai/code), ask for the change and use **`/release`**: the skill in `.claude/skills/release/` runs this whole checklist. `.claude/settings.json` pre-approves safe commands (tests, build, git status), blocks force pushes and pushes to `main`, and a hook runs `npm test` before every commit Claude makes. See `CLAUDE.md` for the project rules.
 
 ## Sharing it with other people
 

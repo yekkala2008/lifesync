@@ -1,6 +1,6 @@
 # LifeSync
 
-A personal planner for office days in Bengaluru, home in Hyderabad, and time with family. It works out where you should be each day so you meet your work-from-office rules with fewer trips, tracks your train/bus bookings, and produces a monthly PDF report.
+A personal planner for office days in one city, home in another, and time with family. The office and home cities are configurable (Bengaluru and Hyderabad by default). It works out where you should be each day so you meet your work-from-office rules with fewer trips, tracks your train/bus bookings, and produces a monthly PDF report.
 
 It is an installable web app (PWA): one codebase, free to host, no app store, and it updates itself when you push to GitHub.
 

@@ -1,5 +1,11 @@
 # Working on LifeSync
 
+## How changes ship
+
+`main` is protected. Every change goes on a branch and through a pull request; the **test** check must pass before merging, and merging publishes the app. Never push to `main`, never force-push, and don't merge unless the user asks.
+
+Use the **release** skill (`/release`, in `.claude/skills/release/`) for every change: it is the step-by-step checklist (branch, Help, version, FP_VERSION, tests, old-data check, PR). A hook (`.claude/hooks/test-before-commit.mjs`) runs `npm test` before each commit and blocks it if tests fail.
+
 ## Every functional change must update the in-app help
 
 When you change what the app does or how it is used, in the same commit:
